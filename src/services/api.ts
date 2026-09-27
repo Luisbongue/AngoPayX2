@@ -59,7 +59,19 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    throw new Error(data.error || 'Ocorreu um erro ao comunicar com os servidores do AngoPayX.');
+    const errorMsg =
+      data.error ||
+      data.message ||
+      (res.status === 404
+        ? `Serviço não encontrado (404) em ${endpoint}.`
+        : res.status === 401
+        ? 'Não autorizado (401). Sessão expirada ou credenciais inválidas.'
+        : res.status === 403
+        ? 'Acesso negado (403).'
+        : res.status === 500
+        ? 'Erro interno do servidor (500).'
+        : `Erro de comunicação HTTP ${res.status} ao contactar o servidor.`);
+    throw new Error(errorMsg);
   }
 
   return data as T;

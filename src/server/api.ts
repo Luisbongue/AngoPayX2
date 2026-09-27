@@ -12,11 +12,6 @@ import {
   TRON_USDT_CONTRACT,
 } from './tronUtils.ts';
 import { runAntigravityTask, isAntigravityConfigured } from './antigravity.ts';
-import {
-  sendVerificationOtpEmail,
-  sendPasswordResetOtpEmail,
-  isEmailConfigured,
-} from './emailService.ts';
 import type {
   User,
   PurchaseOrder,
@@ -211,25 +206,18 @@ apiRouter.post('/auth/register', async (req: Request, res: Response) => {
 
     db.createUser(newUser);
 
-    // Dispatch real email via SMTP, Gmail or Resend
-    const emailResult = await sendVerificationOtpEmail(normEmail, otpCode, name.trim());
-
     db.addNotification({
       userId: newUser.id,
-      title: 'Confirmação de Registo - Código OTP',
-      message: `Bem-vindo ao AngoPayX! O seu código de verificação é ${otpCode} (válido por 15 minutos).`,
+      title: 'Registo Concluído',
+      message: 'Bem-vindo ao AngoPayX! Verifique o email oficial enviado pelo Supabase para confirmar a sua conta.',
       type: 'info',
       isRead: false,
     });
 
     return res.status(201).json({
-      message: emailResult.success
-        ? `Enviámos um email com o código de 6 dígitos para ${newUser.email}. Verifique a sua caixa de entrada e pasta de spam.`
-        : `Conta registada com sucesso! Código de verificação OTP gerado: ${otpCode}. (Válido por 15 minutos).`,
+      message: 'Conta criada com sucesso! O email de confirmação foi enviado pelo Supabase Auth.',
       userId: newUser.id,
       email: newUser.email,
-      otpSent: emailResult.success,
-      otpCode: !emailResult.success ? otpCode : undefined,
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Erro ao criar conta.' });
@@ -343,16 +331,6 @@ apiRouter.post('/auth/resend-verification', async (req: Request, res: Response) 
       return res.json({ message: 'Este email já se encontra confirmado. Pode iniciar sessão.' });
     }
 
-    // Generate fresh OTP code and save
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    user.verificationCode = newOtp;
-    user.verificationCodeExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    db.updateUser(user);
-
-    // Dispatch email
-    const emailResult = await sendVerificationOtpEmail(normEmail, newOtp, user.name);
-
-    // Also trigger Supabase resend in background if configured
     if (isSupabaseServerConfigured) {
       try {
         await supabaseAdmin.auth.resend({
@@ -365,11 +343,7 @@ apiRouter.post('/auth/resend-verification', async (req: Request, res: Response) 
     }
 
     return res.json({
-      message: emailResult.success
-        ? `Novo código de verificação enviado para ${normEmail}. Verifique a sua caixa de entrada e pasta de spam.`
-        : `Novo código OTP gerado: ${newOtp} (válido por 15 minutos).`,
-      otpSent: emailResult.success,
-      otpCode: !emailResult.success ? newOtp : undefined,
+      message: 'Email de confirmação reenviado com sucesso pelo Supabase Auth. Verifique a sua caixa de entrada e pasta de spam.',
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Erro ao reenviar confirmação.' });
@@ -505,13 +479,6 @@ apiRouter.post('/auth/forgot-password', async (req: Request, res: Response) => {
       });
     }
 
-    const resetOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    user.resetCode = resetOtp;
-    user.resetCodeExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    db.updateUser(user);
-
-    const emailResult = await sendPasswordResetOtpEmail(normEmail, resetOtp, user.name);
-
     if (isSupabaseServerConfigured) {
       try {
         await supabaseAdmin.auth.resetPasswordForEmail(normEmail);
@@ -521,11 +488,7 @@ apiRouter.post('/auth/forgot-password', async (req: Request, res: Response) => {
     }
 
     return res.json({
-      message: emailResult.success
-        ? 'Enviámos um email com o seu código de recuperação. Verifique a caixa de entrada e spam.'
-        : `Código de recuperação gerado: ${resetOtp} (válido por 15 minutos).`,
-      otpSent: emailResult.success,
-      resetCode: !emailResult.success ? resetOtp : undefined,
+      message: 'Se o endereço estiver registado, o Supabase enviou um email com o link de recuperação.',
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Erro na recuperação de senha.' });

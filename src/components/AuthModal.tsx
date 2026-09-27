@@ -24,8 +24,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [receivedOtp, setReceivedOtp] = useState<string | null>(null);
-  const [receivedResetCode, setReceivedResetCode] = useState<string | null>(null);
 
   // Form states
   const [email, setEmail] = useState('');
@@ -59,9 +57,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     resetMessages();
-    setReceivedOtp(null);
     setLoading(true);
     try {
+      if (password !== confirmPassword) {
+        throw new Error('As palavras-passe inseridas não coincidem.');
+      }
+      if (password.length < 6) {
+        throw new Error('A palavra-passe deve ter pelo menos 6 caracteres.');
+      }
+
       const res = await signUp({
         name,
         email,
@@ -69,10 +73,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         confirmPassword,
         phone,
       });
-      if ((res as any)?.otpCode) {
-        setReceivedOtp((res as any).otpCode);
-      }
-      setSuccessMsg(res.message || `Enviámos um email de confirmação para ${email}. Verifique a sua caixa de entrada.`);
+
+      setSuccessMsg(
+        res.message || `Enviámos um email de confirmação para ${email}. Verifique a sua caixa de entrada e clique no link de ativação.`
+      );
       setMode('verify');
     } catch (err: any) {
       setError(err.message || 'Falha no registo.');
@@ -89,7 +93,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       await verifyEmail({ email, code });
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Código de verificação incorreto ou expirado.');
+      setError(err.message || 'Código de confirmação incorreto ou expirado.');
     } finally {
       setLoading(false);
     }
@@ -104,12 +108,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     setResending(true);
     try {
       const res = await resendVerification(email);
-      if ((res as any)?.otpCode) {
-        setReceivedOtp((res as any).otpCode);
-      }
-      setSuccessMsg(res.message || 'Novo código de confirmação enviado.');
+      setSuccessMsg(res.message || 'Email de confirmação reenviado com sucesso.');
     } catch (err: any) {
-      setError(err.message || 'Falha ao reenviar código de confirmação.');
+      setError(err.message || 'Falha ao reenviar email de confirmação.');
     } finally {
       setResending(false);
     }
@@ -118,14 +119,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     resetMessages();
-    setReceivedResetCode(null);
     setLoading(true);
     try {
       const res = await sendPasswordReset(email);
-      if ((res as any)?.resetCode) {
-        setReceivedResetCode((res as any).resetCode);
-      }
-      setSuccessMsg(res.message || 'Se o endereço estiver registado, enviámos um código de recuperação.');
+      setSuccessMsg(res.message || 'Se o endereço estiver registado, enviámos um email com o link de recuperação.');
       setMode('reset');
     } catch (err: any) {
       setError(err.message || 'Falha ao processar recuperação.');
@@ -413,51 +410,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           </form>
         )}
 
-        {/* MODE: VERIFY EMAIL (REAL EMAIL OTP ENGINE + SUPABASE AUTH) */}
+        {/* MODE: VERIFY EMAIL (SUPABASE AUTH DIRECT FLOW) */}
         {mode === 'verify' && (
           <form onSubmit={handleVerifyEmail} className="space-y-4">
-            <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-xs text-slate-300 space-y-2">
-              <p className="font-semibold text-white flex items-center gap-1.5">
+            <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700/80 text-xs text-slate-300 space-y-2.5">
+              <p className="font-bold text-white text-sm flex items-center gap-2">
                 <Mail className="w-4 h-4 text-emerald-400" />
-                Verifique a sua caixa de entrada
+                Email de Confirmação Enviado
               </p>
-              <p className="text-slate-400 leading-relaxed">
-                Enviámos um email com o <strong>código OTP de 6 dígitos</strong> para <strong className="text-white">{email}</strong>.
+              <p className="text-slate-300 leading-relaxed">
+                Enviámos uma mensagem com o link de ativação oficial para <strong className="text-white font-semibold">{email}</strong>.
               </p>
-              <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-700/60 space-y-1">
-                <p>• Verifique também a sua pasta de <strong>Spam ou Lixo Eletrónico</strong>.</p>
-                <p>• O código expira em <strong>15 minutos</strong>.</p>
+              <div className="text-[12px] text-slate-400 pt-2 border-t border-slate-700/60 space-y-1.5">
+                <p>
+                  1. Aceda ao seu email e clique no <strong className="text-emerald-400">link de confirmação</strong> para entrar diretamente no AngoPayX.
+                </p>
+                <p>
+                  2. Verifique também a pasta de <strong>Spam ou Lixo Eletrónico</strong>.
+                </p>
+                <p>
+                  3. Se o email contiver um código numérico de 6 dígitos, pode inseri-lo abaixo para confirmação imediata:
+                </p>
               </div>
             </div>
 
-            {/* Instant Fallback / Assisted OTP Helper Banner */}
-            {receivedOtp && (
-              <div className="p-3 bg-emerald-950/60 border border-emerald-500/50 rounded-xl text-xs flex items-center justify-between gap-2 shadow-lg shadow-emerald-950/40">
-                <div>
-                  <span className="text-[11px] text-emerald-300 font-medium block">Código OTP Disponível:</span>
-                  <span className="font-mono text-xl font-black text-emerald-400 tracking-widest">{receivedOtp}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCode(receivedOtp)}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shrink-0"
-                >
-                  <span>Preencher</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Código de Confirmação (6 dígitos)
+                Código de Confirmação (Opcional - se recebido no email)
               </label>
               <div className="relative">
                 <KeyRound className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
                 <input
                   type="text"
                   maxLength={8}
-                  required
                   placeholder="000000"
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
@@ -474,7 +459,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               {loading ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>A validar código...</span>
+                  <span>A validar com Supabase...</span>
                 </>
               ) : (
                 <>
@@ -492,7 +477,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 className="text-emerald-400 hover:underline flex items-center gap-1.5 disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${resending ? 'animate-spin' : ''}`} />
-                {resending ? 'A reenviar...' : 'Reenviar código por email'}
+                {resending ? 'A reenviar...' : 'Reenviar email de confirmação'}
               </button>
               <button
                 type="button"
@@ -558,23 +543,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 Introduza o código recebido no seu email e defina a nova palavra-passe.
               </p>
             </div>
-
-            {receivedResetCode && (
-              <div className="p-3 bg-indigo-950/60 border border-indigo-500/50 rounded-xl text-xs flex items-center justify-between gap-2">
-                <div>
-                  <span className="text-[11px] text-indigo-300 font-medium block">Código de Recuperação:</span>
-                  <span className="font-mono text-xl font-black text-indigo-400 tracking-widest">{receivedResetCode}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCode(receivedResetCode)}
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shrink-0"
-                >
-                  <span>Preencher</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">Código de Recuperação (do Email)</label>
