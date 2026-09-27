@@ -1,0 +1,283 @@
+{
+  "users": [
+    {
+      "id": "61b14153-532c-4afb-a72c-9fea7941d179",
+      "name": "LUIS BONGUE",
+      "email": "luisbongue4@gmail.com",
+      "phone": "935531547",
+      "role": "super_admin",
+      "accountStatus": "Ativa",
+      "kycStatus": "Aprovado",
+      "emailVerified": true,
+      "passwordHash": "150b109ee78ad83d1ec85ba318f2ee8ab7ea2ecb793b22fa298b67cafbb12cec",
+      "createdAt": "2026-09-27T09:27:56.107Z",
+      "depositAddressTRC20": "Td255e471aa99c8c5fc10721176eece4c1",
+      "lastLoginAt": "2026-09-27T09:27:56.108Z"
+    }
+  ],
+  "kycRecords": [],
+  "balances": {
+    "61b14153-532c-4afb-a72c-9fea7941d179": {
+      "userId": "61b14153-532c-4afb-a72c-9fea7941d179",
+      "availableBalance": 0,
+      "lockedBalance": 0,
+      "totalBalance": 0,
+      "updatedAt": "2026-09-27T09:27:56.107Z"
+    },
+    "85f029e2-1389-458c-a3e2-6bc827a60933": {
+      "userId": "85f029e2-1389-458c-a3e2-6bc827a60933",
+      "availableBalance": 0,
+      "lockedBalance": 0,
+      "totalBalance": 0,
+      "updatedAt": "2026-09-27T09:49:34.387Z"
+    },
+    "usr-54102b19": {
+      "userId": "usr-54102b19",
+      "availableBalance": 0,
+      "lockedBalance": 0,
+      "totalBalance": 0,
+      "updatedAt": "2026-09-27T09:49:41.861Z"
+    }
+  },
+  "ledger": [],
+  "purchases": [],
+  "sales": [],
+  "deposits": [],
+  "withdrawals": [],
+  "wallets": [],
+  "paymentMethods": [
+    {
+      "id": "iban",
+      "name": "Depósito via Kwik / IBAN Bancário",
+      "isActive": true,
+      "bank": "Kwik / Rede Interbancária EMIS",
+      "beneficiary": "PayPal",
+      "accountOrCode": "0420 0000 0000 1098 3557 1",
+      "instructions": "Transfira o valor exato em Kwanzas via Kwik ou por IBAN para a conta gerada pela empresa PayPal (0420 0000 0000 1098 3557 1) e anexe o comprovativo da operação."
+    },
+    {
+      "id": "referencia",
+      "name": "Pagamento por Código de Referência (Multicaixa / Kwik)",
+      "isActive": true,
+      "bank": "Multicaixa Express / Kwik / Rede EMIS",
+      "beneficiary": "Entidade: 10116 (PayPal / AngoPayX)",
+      "accountOrCode": "935 531 547",
+      "instructions": "Aceda ao Multicaixa Express ou Kwik > Pagamentos por Referência > Insira a Entidade: 10116 e a Referência ou ID: 935 531 547. Efetue o pagamento do valor exato em Kz e anexe o comprovativo."
+    }
+  ],
+  "exchangeSettings": {
+    "buyRateKz": 1350,
+    "sellRateKz": 1250,
+    "updatedAt": "2026-01-10T00:00:00.000Z",
+    "updatedBy": "Sistema Inicial"
+  },
+  "feeSettings": {
+    "buyFeePercent": 0,
+    "sellFeePercent": 0,
+    "sellFeeKzFixed": 0,
+    "trc20WithdrawalFeeUsdt": 1.5,
+    "binanceWithdrawalFeeUsdt": 0.5,
+    "updatedAt": "2026-01-10T00:00:00.000Z",
+    "updatedBy": "Sistema Inicial"
+  },
+  "limitSettings": {
+    "minBuyUsdt": 10,
+    "maxBuyUsdt": 10000,
+    "minSellUsdt": 10,
+    "maxSellUsdt": 10000,
+    "minDepositUsdt": 5,
+    "minWithdrawUsdt": 10,
+    "maxWithdrawUsdt": 5000,
+    "dailyLimitUsdt": 20000,
+    "monthlyLimitUsdt": 100000,
+    "updatedAt": "2026-01-10T00:00:00.000Z",
+    "updatedBy": "Sistema Inicial"
+  },
+  "notifications": [
+    {
+      "userId": "usr-54102b19",
+      "title": "Email Verificado com Sucesso",
+      "message": "A sua conta AngoPayX está ativa para envio de KYC e transações em Kz e USDT.",
+      "type": "success",
+      "isRead": false,
+      "id": "notif-766e871d-daa1-4885-bae2-b841fa791414",
+      "createdAt": "2026-09-27T09:49:52.882Z"
+    },
+    {
+      "userId": "usr-54102b19",
+      "title": "Confirmação de Registo - Código OTP",
+      "message": "Bem-vindo ao AngoPayX! O seu código de verificação é 372767 (válido por 15 minutos).",
+      "type": "info",
+      "isRead": false,
+      "id": "notif-022abd56-86d7-4cc5-b088-8cbc3261a621",
+      "createdAt": "2026-09-27T09:49:41.861Z"
+    },
+    {
+      "userId": "85f029e2-1389-458c-a3e2-6bc827a60933",
+      "title": "Email Verificado com Sucesso",
+      "message": "A sua conta AngoPayX está ativa para envio de KYC e transações em Kz e USDT.",
+      "type": "success",
+      "isRead": false,
+      "id": "notif-ae65d749-a84a-492e-b2f9-c7c2244dc9a7",
+      "createdAt": "2026-09-27T09:49:38.012Z"
+    },
+    {
+      "userId": "85f029e2-1389-458c-a3e2-6bc827a60933",
+      "title": "Confirmação de Registo - Código OTP",
+      "message": "Bem-vindo ao AngoPayX! O seu código de verificação é 430499 (válido por 15 minutos).",
+      "type": "info",
+      "isRead": false,
+      "id": "notif-755f331e-2697-49a1-92d7-ef41cfab5577",
+      "createdAt": "2026-09-27T09:49:34.388Z"
+    }
+  ],
+  "supportTickets": [],
+  "auditLogs": [],
+  "processedTxids": [],
+  "reconciliationHistory": [
+    {
+      "totalInternalClientUsdt": 0,
+      "totalLockedClientUsdt": 0,
+      "vaultBlockchainUsdt": 85200,
+      "divergenceUsdt": 85200,
+      "totalKzDisbursed": 0,
+      "totalKzReceived": 0,
+      "hasDivergence": false,
+      "lastReconciliationAt": "2026-09-27T09:29:00.539Z"
+    },
+    {
+      "totalInternalClientUsdt": 0,
+      "totalLockedClientUsdt": 0,
+      "vaultBlockchainUsdt": 85200,
+      "divergenceUsdt": 85200,
+      "totalKzDisbursed": 0,
+      "totalKzReceived": 0,
+      "hasDivergence": false,
+      "lastReconciliationAt": "2026-09-27T09:28:59.702Z"
+    }
+  ],
+  "advertisements": [
+    {
+      "id": "ad-unitel-001",
+      "companyName": "Unitel Money Angola",
+      "title": "Recargas & Pagamentos em Kwanza sem Taxa Adicional",
+      "description": "Transfira saldo para a sua carteira digital ou pague no comércio com a maior rede móvel de Angola.",
+      "callToAction": "Saber Mais",
+      "destinationUrl": "https://www.unitel.ao/unitel-money/",
+      "bannerUrl": "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=800&q=80",
+      "badgeText": "Patrocinador Oficial",
+      "placement": "top_banner",
+      "status": "active",
+      "category": "Telecom & Finanças",
+      "pricing": {
+        "amountKz": 450000,
+        "amountUsdt": 333,
+        "billingModel": "monthly",
+        "isPaid": true,
+        "notes": "Contrato corporativo trimestral (Renovação automática)"
+      },
+      "impressions": 1467,
+      "clicks": 185,
+      "startDate": "2026-02-01T00:00:00.000Z",
+      "endDate": "2026-12-31T23:59:59.000Z",
+      "createdAt": "2026-02-01T10:00:00.000Z",
+      "updatedAt": "2026-02-01T10:00:00.000Z",
+      "contactEmail": "parcerias@unitelmoney.ao",
+      "contactPhone": "+244 923 111 222"
+    },
+    {
+      "id": "ad-bai-002",
+      "companyName": "Banco BAI Directo",
+      "title": "Conta Digital BAI para Câmbio e Operações de Negócios",
+      "description": "Abra a sua conta digital BAI em minutos e movimente Kwanza com máxima conformidade bancária.",
+      "callToAction": "Abrir Conta Online",
+      "destinationUrl": "https://www.bancobai.ao/",
+      "bannerUrl": "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=800&q=80",
+      "badgeText": "Destaque Bancário",
+      "placement": "dashboard_native",
+      "status": "active",
+      "category": "Banca Comercial",
+      "pricing": {
+        "amountKz": 600000,
+        "amountUsdt": 444,
+        "billingModel": "monthly",
+        "isPaid": true,
+        "notes": "Campanha de expansão de contas bancárias digitais"
+      },
+      "impressions": 2237,
+      "clicks": 312,
+      "startDate": "2026-02-10T00:00:00.000Z",
+      "endDate": "2026-11-30T23:59:59.000Z",
+      "createdAt": "2026-02-10T08:00:00.000Z",
+      "updatedAt": "2026-02-10T08:00:00.000Z",
+      "contactEmail": "empresas@bancobai.ao",
+      "contactPhone": "+244 222 696 900"
+    },
+    {
+      "id": "ad-kwanzapay-003",
+      "companyName": "KwanzaPay Gateway",
+      "title": "Receba Pagamentos Online na sua Loja Virtual em Luanda",
+      "description": "A API de pagamentos angolana mais simples para e-commerce. Aceite Multicaixa Express e USDT.",
+      "callToAction": "Integrar API",
+      "destinationUrl": "https://kwanzapay.ao",
+      "bannerUrl": "https://images.unsplash.com/photo-1556742049-0a67c5574f73?auto=format&fit=crop&w=800&q=80",
+      "badgeText": "Parceiro Tecnológico",
+      "placement": "sidebar",
+      "status": "active",
+      "category": "E-commerce & TI",
+      "pricing": {
+        "amountKz": 300000,
+        "amountUsdt": 222,
+        "billingModel": "monthly",
+        "isPaid": true,
+        "notes": "Plano de visibilidade para desenvolvedores e lojistas"
+      },
+      "impressions": 981,
+      "clicks": 145,
+      "startDate": "2026-03-01T00:00:00.000Z",
+      "endDate": "2026-10-31T23:59:59.000Z",
+      "createdAt": "2026-03-01T12:00:00.000Z",
+      "updatedAt": "2026-03-01T12:00:00.000Z",
+      "contactEmail": "devs@kwanzapay.ao",
+      "contactPhone": "+244 944 888 999"
+    }
+  ],
+  "adInquiries": [
+    {
+      "companyName": "Africell Angola",
+      "contactPerson": "Mariana Silva",
+      "email": "mariana@africell.ao",
+      "phone": "+244 923 999 888",
+      "budget": "500.000 Kz",
+      "preferredPlacement": "top_banner",
+      "message": "Gostaríamos de anunciar os novos pacotes empresariais no banner do topo.",
+      "id": "inq-mueacht3-zfnw",
+      "status": "pending",
+      "createdAt": "2026-09-23T15:56:25.767Z"
+    },
+    {
+      "id": "inq-001",
+      "companyName": "Angola Express Logística Lda",
+      "contactPerson": "Carlos Vandúnem",
+      "email": "marketing@angolaexpress.co.ao",
+      "phone": "+244 923 456 789",
+      "budget": "400.000 Kz / mês",
+      "preferredPlacement": "dashboard_native",
+      "message": "Gostaríamos de colocar um banner promovendo o nosso serviço de entregas rápidas de encomendas e documentos em Luanda e Benguela para os vossos clientes empresariais.",
+      "status": "pending",
+      "createdAt": "2026-03-15T14:30:00.000Z"
+    },
+    {
+      "id": "inq-002",
+      "companyName": "Tchilar Facturação Certificada AGT",
+      "contactPerson": "Engª Nádia Morais",
+      "email": "comercial@tchilar.ao",
+      "phone": "+244 945 112 334",
+      "budget": "250 USDT / mês",
+      "preferredPlacement": "top_banner",
+      "message": "Pretendemos anunciar o nosso software na nuvem com emissão de faturas certificadas pela AGT para comerciantes de criptoactivos e cambistas.",
+      "status": "rejected",
+      "createdAt": "2026-03-18T09:15:00.000Z"
+    }
+  ]
+}

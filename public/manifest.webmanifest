@@ -1,0 +1,56 @@
+{
+  "id": "/",
+  "name": "AngoPayX - Intermediação USDT & Kwanza",
+  "short_name": "AngoPayX",
+  "description": "Plataforma profissional de intermediação e câmbio USDT TRC20 e Kwanza (Kz) em Angola com carteira e ledger auditável.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "categories": ["finance", "business"],
+  "lang": "pt-AO",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Comprar USDT",
+      "short_name": "Comprar",
+      "description": "Comprar USDT com pagamento em Kwanza",
+      "url": "/?tab=buy",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Vender USDT",
+      "short_name": "Vender",
+      "description": "Vender USDT e receber Kwanzas na conta bancária",
+      "url": "/?tab=sell",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    }
+  ]
+}

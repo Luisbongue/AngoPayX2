@@ -1,0 +1,8 @@
+{
+  "name": "Remix AngoPayX - Intermediação USDT \u0026 Kwanza (Kz) em Angola",
+  "description": "Plataforma profissional para compra e venda de USDT com pagamentos em Kwanza (Kz), depósitos e saques TRON TRC20 e Binance com ledger auditável.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.angopayx.app",
+      "sha256_cert_fingerprints": [
+        "14:6D:E9:7D:0F:52:CE:EB:2E:EB:F2:E2:AA:7A:B4:9C:2F:3A:C4:4B:D2:C3:68:1B:02:DF:D2:5B:CD:07:69:A3"
+      ]
+    }
+  }
+]
