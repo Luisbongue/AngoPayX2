@@ -98,11 +98,84 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 6. Tabela Oficial de Ordens de Compra de USDT (purchase_orders)
+CREATE TABLE IF NOT EXISTS public.purchase_orders (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  user_email TEXT NOT NULL,
+  user_name TEXT,
+  usdt_amount NUMERIC NOT NULL,
+  buy_rate_kz NUMERIC NOT NULL,
+  subtotal_kz NUMERIC NOT NULL,
+  fee_kz NUMERIC DEFAULT 0,
+  total_kz NUMERIC NOT NULL,
+  payment_method_type TEXT NOT NULL,
+  payment_method_details JSONB NOT NULL,
+  target_wallet JSONB,
+  receipt_url TEXT,
+  receipt_submitted_at TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'Aguardando pagamento' CHECK (status IN ('Aguardando pagamento', 'Comprovativo enviado', 'Em análise', 'Pagamento confirmado', 'USDT creditado', 'Rejeitado', 'Cancelado')),
+  admin_notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- 7. RLS para purchase_orders
+ALTER TABLE public.purchase_orders ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Utilizadores podem ver as suas próprias ordens de compra"
+ON public.purchase_orders FOR SELECT
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Utilizadores podem criar as suas ordens de compra"
+ON public.purchase_orders FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Utilizadores podem atualizar as suas ordens de compra"
+ON public.purchase_orders FOR UPDATE
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Administradores têm acesso total às ordens de compra"
+ON public.purchase_orders FOR ALL
+USING (
+  EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('super_admin', 'finance_admin', 'kyc_admin', 'auditor')
+  )
+);
 ```
 
 ---
 
-## 3. Storage Bucket para Documentos KYC (Opcional)
+## 3. Storage Bucket para Comprovativos de Compra (`purchase-proofs`)
+
+No painel **Storage** do Supabase:
+1. Crie um novo bucket chamado **`purchase-proofs`**;
+2. Defina-o como **Public** para acesso seguro direto da imagem/PDF;
+3. Ou execute o script SQL abaixo no SQL Editor:
+
+```sql
+-- Criar bucket purchase-proofs
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('purchase-proofs', 'purchase-proofs', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- Políticas de acesso ao storage
+CREATE POLICY "Utilizadores autenticados podem carregar comprovativos de compra"
+ON storage.objects FOR INSERT
+WITH CHECK (
+  bucket_id = 'purchase-proofs' AND auth.role() = 'authenticated'
+);
+
+CREATE POLICY "Acesso público de leitura para comprovativos"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'purchase-proofs');
+```
+
+---
+
+## 4. Storage Bucket para Documentos KYC (`kyc-documents`)
 
 No painel **Storage** do Supabase:
 1. Crie um novo bucket chamado `kyc-documents`;

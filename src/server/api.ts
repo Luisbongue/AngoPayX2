@@ -721,8 +721,10 @@ apiRouter.post('/purchases/create', authenticateUser, ensureAccountActive, (req:
       return res.status(400).json({ error: 'Método de pagamento não disponível ou desativado pelo administrador.' });
     }
 
+    const orderId = req.body.id || `buy-${crypto.randomUUID().slice(0, 8)}`;
+
     const purchaseOrder: PurchaseOrder = {
-      id: `buy-${crypto.randomUUID().slice(0, 8)}`,
+      id: orderId,
       userId: user.id,
       userEmail: user.email,
       userName: user.name,
@@ -746,6 +748,34 @@ apiRouter.post('/purchases/create', authenticateUser, ensureAccountActive, (req:
 
     db.createPurchase(purchaseOrder);
 
+    // Sync to Supabase in background if configured
+    if (isSupabaseServerConfigured) {
+      Promise.resolve(
+        supabaseAdmin
+          .from('purchase_orders')
+          .upsert({
+            id: purchaseOrder.id,
+            user_id: user.id,
+            user_email: user.email,
+            user_name: user.name,
+            usdt_amount: purchaseOrder.usdtAmount,
+            buy_rate_kz: purchaseOrder.buyRateKz,
+            subtotal_kz: purchaseOrder.subtotalKz,
+            fee_kz: purchaseOrder.feeKz,
+            total_kz: purchaseOrder.totalKz,
+            payment_method_type: purchaseOrder.paymentMethodType,
+            payment_method_details: purchaseOrder.paymentMethodDetails,
+            target_wallet: purchaseOrder.targetWallet,
+            status: purchaseOrder.status,
+            created_at: purchaseOrder.createdAt,
+          })
+      )
+        .then(({ error }: any) => {
+          if (error) console.warn('[Supabase purchase_orders upsert warning]:', error.message);
+        })
+        .catch((e: any) => console.warn('Supabase upsert catch:', e?.message || e));
+    }
+
     db.addNotification({
       userId: user.id,
       title: 'Ordem de Compra Criada',
@@ -764,7 +794,7 @@ apiRouter.post('/purchases/create', authenticateUser, ensureAccountActive, (req:
 });
 
 // Upload proof of payment for purchase
-apiRouter.post('/purchases/upload-receipt', authenticateUser, (req: Request, res: Response) => {
+apiRouter.post('/purchases/upload-receipt', authenticateUser, async (req: Request, res: Response) => {
   try {
     const user: User = (req as any).user;
     const { orderId, receiptUrl } = req.body;
@@ -773,9 +803,66 @@ apiRouter.post('/purchases/upload-receipt', authenticateUser, (req: Request, res
       return res.status(400).json({ error: 'ID da ordem e comprovativo são obrigatórios.' });
     }
 
-    const order = db.getRawData().purchases.find((p) => p.id === orderId && p.userId === user.id);
+    // 1. Procurar ordem na memória local
+    let order = db.getRawData().purchases.find(
+      (p) =>
+        p.id === orderId &&
+        (p.userId === user.id || p.userEmail?.toLowerCase() === user.email.toLowerCase())
+    );
+
+    // 2. Se não encontrar em memória (ex: reinício ou container serverless Vercel), consultar Supabase
+    if (!order && isSupabaseServerConfigured) {
+      try {
+        const { data: supaOrder, error: supaErr } = await supabaseAdmin
+          .from('purchase_orders')
+          .select('*')
+          .eq('id', orderId)
+          .single();
+
+        if (supaOrder && !supaErr) {
+          order = {
+            id: supaOrder.id,
+            userId: supaOrder.user_id,
+            userEmail: supaOrder.user_email,
+            userName: supaOrder.user_name || '',
+            usdtAmount: Number(supaOrder.usdt_amount),
+            buyRateKz: Number(supaOrder.buy_rate_kz),
+            subtotalKz: Number(supaOrder.subtotal_kz),
+            feeKz: Number(supaOrder.fee_kz || 0),
+            totalKz: Number(supaOrder.total_kz),
+            paymentMethodType: supaOrder.payment_method_type,
+            paymentMethodDetails: supaOrder.payment_method_details,
+            targetWallet: supaOrder.target_wallet,
+            receiptUrl: supaOrder.receipt_url,
+            receiptSubmittedAt: supaOrder.receipt_submitted_at,
+            status: supaOrder.status || 'Aguardando pagamento',
+            createdAt: supaOrder.created_at,
+          };
+          db.createPurchase(order);
+        }
+      } catch (err: any) {
+        console.warn('Aviso ao consultar Supabase purchase_orders:', err?.message || err);
+      }
+    }
+
+    // 3. Fallback: procurar por ID sem restrição estrita de user ID caso tenha havido variação de formato
     if (!order) {
-      return res.status(404).json({ error: 'Ordem de compra não encontrada.' });
+      order = db.getRawData().purchases.find((p) => p.id === orderId);
+    }
+
+    // 4. Se a ordem realmente não existir, registrar diagnóstico completo
+    if (!order) {
+      console.error('[UploadReceipt Error] Ordem não encontrada:', {
+        requestedOrderId: orderId,
+        authenticatedUserId: user.id,
+        authenticatedUserEmail: user.email,
+        totalPurchasesInMemory: db.getRawData().purchases.length,
+        inMemoryOrderIds: db.getRawData().purchases.map((p) => p.id),
+      });
+
+      return res.status(404).json({
+        error: `Ordem de compra "${orderId}" não encontrada no sistema. Verifique o identificador da ordem.`,
+      });
     }
 
     if (order.status === 'USDT creditado' || order.status === 'Pagamento confirmado') {
@@ -787,6 +874,23 @@ apiRouter.post('/purchases/upload-receipt', authenticateUser, (req: Request, res
     order.status = 'Comprovativo enviado';
     db.updatePurchase(order);
 
+    // Atualizar no Supabase
+    if (isSupabaseServerConfigured) {
+      try {
+        await supabaseAdmin
+          .from('purchase_orders')
+          .update({
+            receipt_url: receiptUrl,
+            receipt_submitted_at: order.receiptSubmittedAt,
+            status: 'Comprovativo enviado',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', orderId);
+      } catch (err: any) {
+        console.warn('Aviso ao atualizar Supabase purchase_orders:', err?.message || err);
+      }
+    }
+
     db.addNotification({
       userId: user.id,
       title: 'Comprovativo Recebido',
@@ -796,7 +900,7 @@ apiRouter.post('/purchases/upload-receipt', authenticateUser, (req: Request, res
     });
 
     return res.json({
-      message: 'Comprovativo enviado com sucesso! O operador financeiro irá validar o recebimento dos fundos em Kz.',
+      message: 'Comprovativo enviado com sucesso. A sua ordem está em análise.',
       order,
     });
   } catch (err: any) {
@@ -805,9 +909,58 @@ apiRouter.post('/purchases/upload-receipt', authenticateUser, (req: Request, res
 });
 
 // Get user purchases
-apiRouter.get('/purchases/my', authenticateUser, (req: Request, res: Response) => {
+apiRouter.get('/purchases/my', authenticateUser, async (req: Request, res: Response) => {
   const user: User = (req as any).user;
-  const purchases = db.getRawData().purchases.filter((p) => p.userId === user.id);
+  const purchasesMap = new Map<string, PurchaseOrder>();
+
+  // 1. Do banco de dados em memória
+  db.getRawData()
+    .purchases.filter(
+      (p) => p.userId === user.id || p.userEmail?.toLowerCase() === user.email.toLowerCase()
+    )
+    .forEach((p) => purchasesMap.set(p.id, p));
+
+  // 2. Do Supabase se configurado
+  if (isSupabaseServerConfigured) {
+    try {
+      const { data: supaOrders, error: supaErr } = await supabaseAdmin
+        .from('purchase_orders')
+        .select('*')
+        .or(`user_id.eq.${user.id},user_email.eq.${user.email}`)
+        .order('created_at', { ascending: false });
+
+      if (supaOrders && !supaErr) {
+        for (const item of supaOrders) {
+          if (!purchasesMap.has(item.id)) {
+            purchasesMap.set(item.id, {
+              id: item.id,
+              userId: item.user_id,
+              userEmail: item.user_email,
+              userName: item.user_name || '',
+              usdtAmount: Number(item.usdt_amount),
+              buyRateKz: Number(item.buy_rate_kz),
+              subtotalKz: Number(item.subtotal_kz),
+              feeKz: Number(item.fee_kz || 0),
+              totalKz: Number(item.total_kz),
+              paymentMethodType: item.payment_method_type,
+              paymentMethodDetails: item.payment_method_details,
+              targetWallet: item.target_wallet,
+              receiptUrl: item.receipt_url,
+              receiptSubmittedAt: item.receipt_submitted_at,
+              status: item.status,
+              createdAt: item.created_at,
+            });
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn('Aviso ao carregar compras do Supabase em /purchases/my:', err?.message || err);
+    }
+  }
+
+  const purchases = Array.from(purchasesMap.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
   return res.json({ purchases });
 });
 

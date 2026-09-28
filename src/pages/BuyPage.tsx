@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { apiClient } from '../services/api.ts';
+import { purchaseService } from '../services/purchaseService.ts';
 import {
   PaymentMethodConfig,
   PurchaseOrder,
@@ -58,6 +59,7 @@ export const BuyPage: React.FC = () => {
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Receipt upload state
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [receiptDataUrl, setReceiptDataUrl] = useState<string>('');
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
 
@@ -108,13 +110,23 @@ export const BuyPage: React.FC = () => {
   };
 
   const loadMyOrders = async () => {
+    if (!user) return;
     try {
-      const res = await apiClient.getMyPurchases();
-      setMyOrders(res.purchases);
-      // If there's an ongoing active order waiting for receipt or payment, open it
-      const ongoing = res.purchases.find(
-        (p) => p.status === 'Aguardando pagamento' || p.status === 'Comprovativo enviado' || p.status === 'Em análise'
-      );
+      const orders = await purchaseService.loadUserOrders(user);
+      setMyOrders(orders);
+
+      // Restore ongoing active order waiting for receipt or review
+      const localActive = purchaseService.getActiveOrderLocally(user.id);
+      const ongoing =
+        (localActive && orders.find((p) => p.id === localActive.id)) ||
+        localActive ||
+        orders.find(
+          (p) =>
+            p.status === 'Aguardando pagamento' ||
+            p.status === 'Comprovativo enviado' ||
+            p.status === 'Em análise'
+        );
+
       if (ongoing && !activeOrder) {
         setActiveOrder(ongoing);
       }
@@ -143,6 +155,11 @@ export const BuyPage: React.FC = () => {
     setError(null);
     setSuccess(null);
 
+    if (!user) {
+      setError('Sessão expirada. Por favor autentique-se para continuar.');
+      return;
+    }
+
     if (targetPlatform !== 'ANGOPAYX') {
       if (!targetIdentifier.trim()) {
         setError(`Por favor forneça o identificador ou e-mail da sua conta ${targetPlatform}.`);
@@ -154,21 +171,31 @@ export const BuyPage: React.FC = () => {
       }
     }
 
+    const selectedMethod = methods.find((m) => m.id === selectedMethodId);
+    if (!selectedMethod) {
+      setError('Método de pagamento não encontrado.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const res = await apiClient.createPurchase({
+      const created = await purchaseService.createPurchase({
         usdtAmount,
-        paymentMethodType: selectedMethodId,
+        paymentMethod: selectedMethod,
         targetWallet: {
           platform: targetPlatform,
-          identifier: targetPlatform === 'ANGOPAYX' ? user?.email : targetIdentifier.trim(),
+          identifier: targetPlatform === 'ANGOPAYX' ? user.email : targetIdentifier.trim(),
         },
+        user,
+        buyRateKz: exchange.buyRateKz,
       });
-      setActiveOrder(res.order);
+
+      setActiveOrder(created);
       setSuccess('Ordem de compra criada com sucesso. Efetue a transferência e anexe o comprovativo abaixo.');
       await loadMyOrders();
     } catch (err: any) {
+      console.error('[Criar Ordem Erro]:', err);
       setError(err.message || 'Erro ao criar ordem de compra.');
     } finally {
       setLoading(false);
@@ -184,6 +211,14 @@ export const BuyPage: React.FC = () => {
       return;
     }
 
+    const validMimeTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'];
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (!validMimeTypes.includes(file.type) && !['jpg', 'jpeg', 'png', 'webp', 'pdf'].includes(extension || '')) {
+      setError('Formato inválido. Por favor envie um ficheiro JPG, PNG ou PDF.');
+      return;
+    }
+
+    setSelectedFile(file);
     const reader = new FileReader();
     reader.onload = () => {
       setReceiptDataUrl(reader.result as string);
@@ -192,20 +227,44 @@ export const BuyPage: React.FC = () => {
   };
 
   const handleUploadReceipt = async () => {
-    if (!activeOrder || !receiptDataUrl) return;
+    if (!activeOrder || (!selectedFile && !receiptDataUrl)) {
+      setError('Por favor selecione um comprovativo em formato JPG, PNG ou PDF antes de enviar.');
+      return;
+    }
+
+    if (!user) {
+      setError('Sessão expirada. Por favor autentique-se para continuar.');
+      return;
+    }
+
     setUploadingReceipt(true);
     setError(null);
+    setSuccess(null);
+
+    console.log('[Confirmar Envio Comprovativo]', {
+      orderId: activeOrder.id,
+      userId: user.id,
+      userEmail: user.email,
+      fileName: selectedFile?.name,
+      fileSize: selectedFile?.size,
+    });
+
     try {
-      const res = await apiClient.uploadPurchaseReceipt({
+      const updatedOrder = await purchaseService.uploadReceipt({
         orderId: activeOrder.id,
-        receiptUrl: receiptDataUrl,
+        file: selectedFile,
+        receiptDataUrl,
+        user,
       });
-      setActiveOrder(res.order);
-      setSuccess('Comprovativo enviado com sucesso! O operador financeiro irá validar os fundos em Kz.');
+
+      setActiveOrder(updatedOrder);
+      setSuccess('Comprovativo enviado com sucesso. A sua ordem está em análise.');
+      setSelectedFile(null);
       setReceiptDataUrl('');
       await loadMyOrders();
     } catch (err: any) {
-      setError(err.message || 'Erro ao anexar comprovativo.');
+      console.error('[UploadReceipt Erro]:', err);
+      setError(err.message || 'Erro ao anexar comprovativo à ordem.');
     } finally {
       setUploadingReceipt(false);
     }
@@ -591,7 +650,12 @@ export const BuyPage: React.FC = () => {
                     {activeOrder.status}
                   </span>
                   <button
-                    onClick={() => setActiveOrder(null)}
+                    onClick={() => {
+                      if (user) purchaseService.clearActiveOrderLocally(user.id);
+                      setActiveOrder(null);
+                      setReceiptDataUrl('');
+                      setSelectedFile(null);
+                    }}
                     className="text-xs text-slate-400 hover:text-white underline ml-2"
                   >
                     Nova Ordem
@@ -798,7 +862,7 @@ export const BuyPage: React.FC = () => {
                   </div>
                   <div
                     className={`p-2 rounded font-semibold ${
-                      activeOrder.receiptUrl
+                      activeOrder.receiptUrl || activeOrder.status !== 'Aguardando pagamento'
                         ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                         : 'bg-slate-800 text-slate-500'
                     }`}
@@ -807,8 +871,12 @@ export const BuyPage: React.FC = () => {
                   </div>
                   <div
                     className={`p-2 rounded font-semibold ${
-                      activeOrder.status === 'Em análise' || activeOrder.status === 'USDT creditado'
+                      activeOrder.status === 'USDT creditado'
                         ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : activeOrder.status === 'Comprovativo enviado' ||
+                          activeOrder.status === 'Em análise' ||
+                          activeOrder.status === 'Pagamento confirmado'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 ring-1 ring-amber-500/30 font-bold'
                         : 'bg-slate-800 text-slate-500'
                     }`}
                   >
@@ -817,7 +885,7 @@ export const BuyPage: React.FC = () => {
                   <div
                     className={`p-2 rounded font-semibold ${
                       activeOrder.status === 'USDT creditado'
-                        ? 'bg-emerald-600 text-white'
+                        ? 'bg-emerald-600 text-white font-bold shadow-lg shadow-emerald-600/30'
                         : 'bg-slate-800 text-slate-500'
                     }`}
                   >
