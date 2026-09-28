@@ -25,8 +25,13 @@ import {
   TronLogo,
   getWalletMeta,
 } from '../components/WalletLogos.tsx';
+import { KycRequiredBanner } from '../components/KycRequiredBanner.tsx';
 
-export const WithdrawPage: React.FC = () => {
+interface WithdrawPageProps {
+  onNavigate?: (tab: string) => void;
+}
+
+export const WithdrawPage: React.FC<WithdrawPageProps> = ({ onNavigate }) => {
   const { user, balance } = useAuth();
   const [type, setType] = useState<WithdrawalPlatform>('BINANCE');
   const [destination, setDestination] = useState('');

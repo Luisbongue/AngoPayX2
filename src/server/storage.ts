@@ -60,16 +60,14 @@ export interface DatabaseSchema {
   adInquiries: AdInquiry[];
 }
 
-// Mapping of Authorized Administrative Emails (Role Recognized by the System upon Manual Registration)
+// Mapping of Authorized Administrative Emails (Sole Administrator: luisbongue4@gmail.com)
 export const ADMINISTRATIVE_EMAILS: Record<string, UserRole> = {
   'luisbongue4@gmail.com': 'super_admin',
-  'luisbongue5@gmail.com': 'finance_admin',
-  'boavidabongue6@gmail.com': 'kyc_admin',
 };
 
 export function getRoleForEmail(email: string): UserRole {
   const norm = email.trim().toLowerCase();
-  return ADMINISTRATIVE_EMAILS[norm] || 'client';
+  return norm === 'luisbongue4@gmail.com' ? 'super_admin' : 'client';
 }
 
 // Initial Seed Data (Clean Production Baseline - No fake users or mock credentials)

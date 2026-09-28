@@ -37,8 +37,13 @@ import {
   validateBybitIdentifier,
   validateRedotPayIdentifier,
 } from '../server/tronUtils.ts';
+import { KycRequiredBanner } from '../components/KycRequiredBanner.tsx';
 
-export const BuyPage: React.FC = () => {
+interface BuyPageProps {
+  onNavigate?: (tab: string) => void;
+}
+
+export const BuyPage: React.FC<BuyPageProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [usdtAmount, setUsdtAmount] = useState<number>(100);
   const [exchange, setExchange] = useState<ExchangeSettings>({ buyRateKz: 1350, sellRateKz: 1250, updatedAt: '', updatedBy: '' });
@@ -160,6 +165,14 @@ export const BuyPage: React.FC = () => {
       return;
     }
 
+    const isSoleAdmin = user?.email?.toLowerCase() === 'luisbongue4@gmail.com';
+    const isKycApproved = Boolean(isSoleAdmin || user?.kycStatus === 'Aprovado');
+
+    if (!isKycApproved) {
+      setError('Para realizar um depósito, a sua conta precisa ter o KYC aprovado.');
+      return;
+    }
+
     if (targetPlatform !== 'ANGOPAYX') {
       if (!targetIdentifier.trim()) {
         setError(`Por favor forneça o identificador ou e-mail da sua conta ${targetPlatform}.`);
@@ -192,7 +205,7 @@ export const BuyPage: React.FC = () => {
       });
 
       setActiveOrder(created);
-      setSuccess('Ordem de compra criada com sucesso. Efetue a transferência e anexe o comprovativo abaixo.');
+      setSuccess('Ordem criada com sucesso.');
       await loadMyOrders();
     } catch (err: any) {
       console.error('[Criar Ordem Erro]:', err);
@@ -237,6 +250,13 @@ export const BuyPage: React.FC = () => {
       return;
     }
 
+    const isSoleAdmin = user?.email?.toLowerCase() === 'luisbongue4@gmail.com';
+    const isKycApproved = Boolean(isSoleAdmin || user?.kycStatus === 'Aprovado');
+    if (!isKycApproved) {
+      setError('Para realizar um depósito, a sua conta precisa ter o KYC aprovado.');
+      return;
+    }
+
     setUploadingReceipt(true);
     setError(null);
     setSuccess(null);
@@ -258,7 +278,7 @@ export const BuyPage: React.FC = () => {
       });
 
       setActiveOrder(updatedOrder);
-      setSuccess('Comprovativo enviado com sucesso. A sua ordem está em análise.');
+      setSuccess('Depósito enviado com sucesso! Recebemos o seu comprovativo e a sua solicitação está agora em análise. Aguarde a confirmação e a libertação dos fundos pela AngoPayX.');
       setSelectedFile(null);
       setReceiptDataUrl('');
       await loadMyOrders();
@@ -314,6 +334,11 @@ export const BuyPage: React.FC = () => {
           <Check className="w-4 h-4 shrink-0" />
           <span>{success}</span>
         </div>
+      )}
+
+      {/* KYC Required Banner when KYC not approved */}
+      {user && !isKycApproved && (
+        <KycRequiredBanner onNavigate={onNavigate} operationName="depósitos e compras de USDT" />
       )}
 
       {/* Main Grid */}
@@ -619,14 +644,23 @@ export const BuyPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={Boolean(
-                    loading ||
+                    !isKycApproved ||
+                      loading ||
                       usdtAmount <= 0 ||
                       (targetPlatform !== 'ANGOPAYX' &&
                         (!targetIdentifier.trim() || (validationResult && !validationResult.isValid)))
                   )}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2"
+                  className={`w-full py-3.5 rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center gap-2 ${
+                    !isKycApproved
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30'
+                  }`}
                 >
-                  {loading ? 'A criar ordem...' : `Prosseguir para Carga na ${currentMeta.name}`}
+                  {!isKycApproved
+                    ? 'KYC Aprovado Obrigatório para Depósito'
+                    : loading
+                    ? 'A criar ordem...'
+                    : `Prosseguir para Carga na ${currentMeta.name}`}
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </form>

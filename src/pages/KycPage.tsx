@@ -4,16 +4,41 @@ import {
   Upload,
   CheckCircle2,
   AlertCircle,
-  FileText,
   UserCheck,
   Camera,
-  Image as ImageIcon,
-  Clock,
+  ArrowRight,
+  FileCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { apiClient } from '../services/api.ts';
+import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 
-export const KycPage: React.FC = () => {
+interface KycPageProps {
+  onNavigate?: (tab: string) => void;
+}
+
+function getErrorMessage(err: unknown): string {
+  if (!err) return 'Não foi possível enviar os documentos. Verifique os ficheiros e tente novamente.';
+  if (typeof err === 'string' && err !== '[object Object]') return err;
+  if (typeof err === 'object') {
+    const e = err as any;
+    if (typeof e.message === 'string' && e.message && e.message !== '[object Object]') {
+      return e.message;
+    }
+    if (typeof e.error === 'string' && e.error && e.error !== '[object Object]') {
+      return e.error;
+    }
+    if (e.error && typeof e.error.message === 'string') {
+      return e.error.message;
+    }
+    if (typeof e.error_description === 'string') {
+      return e.error_description;
+    }
+  }
+  return 'Não foi possível enviar os documentos. Verifique os ficheiros e tente novamente.';
+}
+
+export const KycPage: React.FC<KycPageProps> = ({ onNavigate }) => {
   const { user, kyc, refreshUser } = useAuth();
 
   const [fullName, setFullName] = useState(user?.name || '');
@@ -21,7 +46,12 @@ export const KycPage: React.FC = () => {
   const [nationality, setNationality] = useState('Angolana');
   const [dateOfBirth, setDateOfBirth] = useState('');
 
-  // Document files (Base64 data URLs)
+  // Real files
+  const [frontFile, setFrontFile] = useState<File | null>(null);
+  const [backFile, setBackFile] = useState<File | null>(null);
+  const [selfieFile, setSelfieFile] = useState<File | null>(null);
+
+  // Previews
   const [docFrontUrl, setDocFrontUrl] = useState('');
   const [docBackUrl, setDocBackUrl] = useState('');
   const [selfieUrl, setSelfieUrl] = useState('');
@@ -30,10 +60,12 @@ export const KycPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const handleFileUpload = (
+  const handleFileInput = (
     e: React.ChangeEvent<HTMLInputElement>,
-    setter: (val: string) => void
+    setFile: (f: File | null) => void,
+    setPreview: (url: string) => void
   ) => {
+    setError(null);
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -42,42 +74,64 @@ export const KycPage: React.FC = () => {
       return;
     }
 
+    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!validTypes.includes(file.type) && !['jpg', 'jpeg', 'png', 'webp'].includes(ext || '')) {
+      setError('Formato inválido. Por favor envie uma imagem nos formatos JPG ou PNG.');
+      return;
+    }
+
+    setFile(file);
     const reader = new FileReader();
     reader.onload = () => {
-      setter(reader.result as string);
+      setPreview(reader.result as string);
     };
     reader.readAsDataURL(file);
   };
 
-  // Sample document helper for quick testing
-  const useSampleDoc = (setter: (val: string) => void, title: string) => {
-    // Generate a simple high-contrast SVG placeholder representing an Angolan BI
-    const canvas = document.createElement('canvas');
-    canvas.width = 400;
-    canvas.height = 250;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, 400, 250);
-      ctx.strokeStyle = '#10b981';
-      ctx.lineWidth = 4;
-      ctx.strokeRect(10, 10, 380, 230);
-      ctx.fillStyle = '#10b981';
-      ctx.font = 'bold 16px sans-serif';
-      ctx.fillText(`REPÚBLICA DE ANGOLA — ${title}`, 25, 45);
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '12px sans-serif';
-      ctx.fillText(`DOCUMENTO OFICIAL DE IDENTIDADE (BI)`, 25, 75);
-      ctx.fillText(`NÚMERO: 004829102LA042`, 25, 105);
-      ctx.fillText(`TITULAR: ${user?.name || 'CIDADÃO ANGOLANO'}`, 25, 135);
-      ctx.fillText(`VALIDADO PARA COMPLIANCE ANGOPAYX`, 25, 165);
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillRect(25, 185, 120, 35);
-      ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.fillText('EMISSO OFICIAL', 35, 207);
-      setter(canvas.toDataURL());
+  const uploadFileToStorage = async (file: File, prefix: string): Promise<string> => {
+    if (!user) throw new Error('Sessão expirada. Por favor inicie sessão.');
+
+    const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const storagePath = `${user.id}/${Date.now()}-${prefix}-${cleanFileName}`;
+
+    if (isSupabaseConfigured) {
+      // 1. Tentar bucket kyc-documents
+      const { error: uploadError } = await supabase.storage
+        .from('kyc-documents')
+        .upload(storagePath, file, { cacheControl: '3600', upsert: false });
+
+      if (!uploadError) {
+        const { data: publicData } = supabase.storage
+          .from('kyc-documents')
+          .getPublicUrl(storagePath);
+        return publicData?.publicUrl || storagePath;
+      }
+
+      console.warn('[KYC Storage] Aviso no bucket kyc-documents:', uploadError.message);
+
+      // 2. Fallback para bucket purchase-proofs
+      const { error: fallbackError } = await supabase.storage
+        .from('purchase-proofs')
+        .upload(`kyc/${storagePath}`, file, { cacheControl: '3600', upsert: false });
+
+      if (!fallbackError) {
+        const { data: fallbackData } = supabase.storage
+          .from('purchase-proofs')
+          .getPublicUrl(`kyc/${storagePath}`);
+        return fallbackData?.publicUrl || storagePath;
+      }
+
+      console.warn('[KYC Storage] Fallback também falhou:', fallbackError.message);
     }
+
+    // Fallback: retornar data URL local
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Erro ao processar ficheiro de imagem.'));
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleSubmitKyc = async (e: React.FormEvent) => {
@@ -85,27 +139,95 @@ export const KycPage: React.FC = () => {
     setError(null);
     setSuccess(null);
 
-    if (!docFrontUrl || !docBackUrl || !selfieUrl) {
+    if (!user) {
+      setError('Sessão expirada. Por favor autentique-se para continuar.');
+      return;
+    }
+
+    if (!fullName.trim() || !idNumber.trim()) {
+      setError('Por favor preencha o seu Nome Completo e o Número do Bilhete de Identidade (BI).');
+      return;
+    }
+
+    if ((!frontFile && !docFrontUrl) || (!backFile && !docBackUrl) || (!selfieFile && !selfieUrl)) {
       setError('Por favor, anexe todas as 3 fotos obrigatórias: BI frente, BI verso e Selfie com o documento.');
       return;
     }
 
     setLoading(true);
+
     try {
-      const res = await apiClient.submitKyc({
-        fullName,
-        idNumber,
-        nationality,
+      // Upload dos ficheiros reais para o Supabase Storage
+      let uploadedFront = docFrontUrl;
+      let uploadedBack = docBackUrl;
+      let uploadedSelfie = selfieUrl;
+
+      if (frontFile) {
+        uploadedFront = await uploadFileToStorage(frontFile, 'frente');
+      }
+      if (backFile) {
+        uploadedBack = await uploadFileToStorage(backFile, 'verso');
+      }
+      if (selfieFile) {
+        uploadedSelfie = await uploadFileToStorage(selfieFile, 'selfie');
+      }
+
+      // Atualizar status no Supabase Database
+      if (isSupabaseConfigured) {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ kyc_status: 'Pendente' })
+            .eq('id', user.id);
+        } catch (supaErr) {
+          console.warn('[Supabase Profiles update error]:', supaErr);
+        }
+
+        try {
+          await supabase
+            .from('kyc_records')
+            .upsert({
+              user_id: user.id,
+              user_email: user.email,
+              user_name: user.name,
+              full_name: fullName.trim(),
+              document_type: 'BI',
+              document_number: idNumber.trim(),
+              nationality: nationality.trim(),
+              date_of_birth: dateOfBirth,
+              status: 'Pendente',
+              bi_front_url: uploadedFront,
+              bi_back_url: uploadedBack,
+              selfie_url: uploadedSelfie,
+              submitted_at: new Date().toISOString(),
+            });
+        } catch (supaKycErr) {
+          console.warn('[Supabase kyc_records upsert warning]:', supaKycErr);
+        }
+      }
+
+      // Enviar para o backend AngoPayX
+      await apiClient.submitKyc({
+        fullName: fullName.trim(),
+        documentType: 'BI',
+        documentNumber: idNumber.trim(),
+        nationality: nationality.trim(),
         dateOfBirth,
-        docFrontUrl,
-        docBackUrl,
-        selfieUrl,
+        biFrontUrl: uploadedFront,
+        biBackUrl: uploadedBack,
+        selfieUrl: uploadedSelfie,
+        // Chaves alternativas para retrocompatibilidade
+        idNumber: idNumber.trim(),
+        docFrontUrl: uploadedFront,
+        docBackUrl: uploadedBack,
       });
 
-      setSuccess('Documentação de KYC submetida com sucesso! A nossa equipa de conformidade irá analisar os documentos.');
+      setSuccess('Dados enviados com sucesso! Os seus documentos foram recebidos e estão em análise. Aguarde a validação da sua identificação.');
       await refreshUser();
-    } catch (err: any) {
-      setError(err.message || 'Erro ao submeter documentos KYC.');
+    } catch (err: unknown) {
+      console.error('[KYC Submit Erro]:', err);
+      const friendlyMessage = getErrorMessage(err);
+      setError(friendlyMessage);
     } finally {
       setLoading(false);
     }
@@ -145,6 +267,7 @@ export const KycPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Alerts */}
       {error && (
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -159,29 +282,61 @@ export const KycPage: React.FC = () => {
         </div>
       )}
 
-      {/* Operator Notes if any */}
+      {/* Admin Notes if rejected */}
       {(kyc?.adminNotes || kyc?.notes) && (
-        <div className="p-4 rounded-xl bg-slate-800 border border-slate-700 text-xs space-y-1">
-          <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px] block">
-            Mensagem do Analista de Conformidade:
-          </span>
+        <div className="p-4 rounded-xl bg-slate-900 border border-amber-500/30 text-xs space-y-1">
+          <div className="font-bold text-amber-400 flex items-center gap-1.5">
+            <AlertCircle className="w-4 h-4" />
+            <span>Mensagem do Administrador / Compliance</span>
+          </div>
           <p className="text-slate-300">{kyc.adminNotes || kyc.notes}</p>
         </div>
       )}
 
-      {/* KYC Form or Verified State */}
+      {/* State Branches */}
       {kycStatus === 'Aprovado' ? (
-        <div className="p-8 rounded-2xl bg-slate-900 border border-emerald-500/30 text-center space-y-3">
-          <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 mx-auto">
+        <div className="p-8 rounded-2xl bg-slate-900 border border-emerald-500/40 text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/40">
             <CheckCircle2 className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-bold text-white">Identidade Verificada com Sucesso</h2>
+          <h2 className="text-lg font-bold text-white">Identidade Totalmente Verificada</h2>
           <p className="text-xs text-slate-400 max-w-md mx-auto">
-            A sua conta foi validada pela equipa do AngoPayX. Os seus limites de compra, venda e saque estão ativos no patamar máximo.
+            A sua conta foi validada com sucesso. Os serviços de Depósito (Compra USDT) e Retirada (Venda USDT) estão 100% liberados para uso.
           </p>
           <div className="pt-2 text-xs text-slate-500">
-            BI Número: <strong className="text-slate-300 font-mono">{kyc?.documentNumber}</strong> • Nome: <strong className="text-slate-300">{kyc?.fullName}</strong>
+            BI Número: <strong className="text-slate-300 font-mono">{kyc?.documentNumber || user?.id}</strong> • Nome: <strong className="text-slate-300">{kyc?.fullName || user?.name}</strong>
           </div>
+          {onNavigate && (
+            <div className="pt-4 flex justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => onNavigate('buy')}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition"
+              >
+                Fazer Depósito (USDT)
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('withdraw')}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition"
+              >
+                Fazer Retirada
+              </button>
+            </div>
+          )}
+        </div>
+      ) : kycStatus === 'Pendente' || kycStatus === 'Em análise' ? (
+        <div className="p-8 rounded-2xl bg-slate-900 border border-amber-500/40 text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center mx-auto border border-amber-500/40 animate-pulse">
+            <FileCheck className="w-8 h-8" />
+          </div>
+          <h2 className="text-lg font-bold text-white">Documentação em Análise</h2>
+          <p className="text-xs text-slate-300 max-w-lg mx-auto">
+            Os seus documentos foram recebidos pela equipa do AngoPayX e estão atualmente em processo de verificação. Assim que a análise for concluída pelo administrador oficial, as operações financeiras serão automaticamente desbloqueadas.
+          </p>
+          <p className="text-[11px] text-slate-400">
+            Tempo estimado: entre 15 e 60 minutos durante o horário comercial.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -250,7 +405,7 @@ export const KycPage: React.FC = () => {
 
                 <div className="pt-4 border-t border-slate-800">
                   <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">
-                    2. Envio de Fotografias dos Documentos
+                    2. Envio de Fotografias dos Documentos Oficiais
                   </h2>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
@@ -261,7 +416,7 @@ export const KycPage: React.FC = () => {
                           <span className="text-xs font-bold text-white">BI (Frente)</span>
                           {docFrontUrl && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
                         </div>
-                        <p className="text-[11px] text-slate-400 mb-2">Foto legível da frente do Bilhete</p>
+                        <p className="text-[11px] text-slate-400 mb-2">Foto nítida e legível da frente do Bilhete</p>
                       </div>
 
                       {docFrontUrl ? (
@@ -273,32 +428,27 @@ export const KycPage: React.FC = () => {
                           />
                           <button
                             type="button"
-                            onClick={() => setDocFrontUrl('')}
+                            onClick={() => {
+                              setFrontFile(null);
+                              setDocFrontUrl('');
+                            }}
                             className="text-[10px] text-rose-400 hover:underline block text-center w-full"
                           >
-                            Substituir
+                            Substituir Ficheiro
                           </button>
                         </div>
                       ) : (
-                        <div className="space-y-1.5">
-                          <label className="block p-3 border border-dashed border-slate-600 hover:border-emerald-500 rounded-lg text-center cursor-pointer bg-slate-900/60">
-                            <Upload className="w-5 h-5 text-slate-400 mx-auto mb-1" />
-                            <span className="text-[10px] text-slate-300 block font-semibold">Anexar Imagem</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => handleFileUpload(e, setDocFrontUrl)}
-                              className="hidden"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => useSampleDoc(setDocFrontUrl, 'FRENTE')}
-                            className="w-full py-1 text-[10px] rounded bg-slate-700/60 text-slate-300 hover:bg-slate-700"
-                          >
-                            Usar Modelo Demo
-                          </button>
-                        </div>
+                        <label className="block p-3 border border-dashed border-slate-600 hover:border-emerald-500 rounded-lg text-center cursor-pointer bg-slate-900/60 transition">
+                          <Upload className="w-5 h-5 text-slate-400 mx-auto mb-1" />
+                          <span className="text-[10px] text-slate-300 block font-semibold">Anexar Imagem</span>
+                          <span className="text-[9px] text-slate-500 block">JPG ou PNG (máx. 8MB)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleFileInput(e, setFrontFile, setDocFrontUrl)}
+                            className="hidden"
+                          />
+                        </label>
                       )}
                     </div>
 
@@ -309,7 +459,7 @@ export const KycPage: React.FC = () => {
                           <span className="text-xs font-bold text-white">BI (Verso)</span>
                           {docBackUrl && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
                         </div>
-                        <p className="text-[11px] text-slate-400 mb-2">Foto legível do verso do Bilhete</p>
+                        <p className="text-[11px] text-slate-400 mb-2">Foto nítida e legível do verso do Bilhete</p>
                       </div>
 
                       {docBackUrl ? (
@@ -321,32 +471,27 @@ export const KycPage: React.FC = () => {
                           />
                           <button
                             type="button"
-                            onClick={() => setDocBackUrl('')}
+                            onClick={() => {
+                              setBackFile(null);
+                              setDocBackUrl('');
+                            }}
                             className="text-[10px] text-rose-400 hover:underline block text-center w-full"
                           >
-                            Substituir
+                            Substituir Ficheiro
                           </button>
                         </div>
                       ) : (
-                        <div className="space-y-1.5">
-                          <label className="block p-3 border border-dashed border-slate-600 hover:border-emerald-500 rounded-lg text-center cursor-pointer bg-slate-900/60">
-                            <Upload className="w-5 h-5 text-slate-400 mx-auto mb-1" />
-                            <span className="text-[10px] text-slate-300 block font-semibold">Anexar Imagem</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => handleFileUpload(e, setDocBackUrl)}
-                              className="hidden"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => useSampleDoc(setDocBackUrl, 'VERSO')}
-                            className="w-full py-1 text-[10px] rounded bg-slate-700/60 text-slate-300 hover:bg-slate-700"
-                          >
-                            Usar Modelo Demo
-                          </button>
-                        </div>
+                        <label className="block p-3 border border-dashed border-slate-600 hover:border-emerald-500 rounded-lg text-center cursor-pointer bg-slate-900/60 transition">
+                          <Upload className="w-5 h-5 text-slate-400 mx-auto mb-1" />
+                          <span className="text-[10px] text-slate-300 block font-semibold">Anexar Imagem</span>
+                          <span className="text-[9px] text-slate-500 block">JPG ou PNG (máx. 8MB)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleFileInput(e, setBackFile, setDocBackUrl)}
+                            className="hidden"
+                          />
+                        </label>
                       )}
                     </div>
 
@@ -369,32 +514,27 @@ export const KycPage: React.FC = () => {
                           />
                           <button
                             type="button"
-                            onClick={() => setSelfieUrl('')}
+                            onClick={() => {
+                              setSelfieFile(null);
+                              setSelfieUrl('');
+                            }}
                             className="text-[10px] text-rose-400 hover:underline block text-center w-full"
                           >
-                            Substituir
+                            Substituir Ficheiro
                           </button>
                         </div>
                       ) : (
-                        <div className="space-y-1.5">
-                          <label className="block p-3 border border-dashed border-slate-600 hover:border-emerald-500 rounded-lg text-center cursor-pointer bg-slate-900/60">
-                            <Camera className="w-5 h-5 text-slate-400 mx-auto mb-1" />
-                            <span className="text-[10px] text-slate-300 block font-semibold">Anexar Selfie</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => handleFileUpload(e, setSelfieUrl)}
-                              className="hidden"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => useSampleDoc(setSelfieUrl, 'SELFIE')}
-                            className="w-full py-1 text-[10px] rounded bg-slate-700/60 text-slate-300 hover:bg-slate-700"
-                          >
-                            Usar Modelo Demo
-                          </button>
-                        </div>
+                        <label className="block p-3 border border-dashed border-slate-600 hover:border-emerald-500 rounded-lg text-center cursor-pointer bg-slate-900/60 transition">
+                          <Camera className="w-5 h-5 text-slate-400 mx-auto mb-1" />
+                          <span className="text-[10px] text-slate-300 block font-semibold">Tirar / Anexar Selfie</span>
+                          <span className="text-[9px] text-slate-500 block">JPG ou PNG (máx. 8MB)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleFileInput(e, setSelfieFile, setSelfieUrl)}
+                            className="hidden"
+                          />
+                        </label>
                       )}
                     </div>
                   </div>
@@ -403,9 +543,10 @@ export const KycPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 transition mt-4"
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 transition mt-4 flex items-center justify-center gap-2"
                 >
-                  {loading ? 'A submeter documentos...' : 'Enviar Documentação para Análise'}
+                  {loading ? 'A enviar documentos para o Supabase Storage...' : 'Enviar Documentação para Análise'}
+                  <ArrowRight className="w-4 h-4" />
                 </button>
               </form>
             </div>

@@ -94,20 +94,21 @@ async function authenticateUser(req: Request, res: Response, next: NextFunction)
   }
 }
 
-// Helper: Enforce administrative roles
-function requireRole(allowedRoles: Array<User['role']>) {
+// Helper: Enforce administrative roles (Sole Administrator: luisbongue4@gmail.com)
+function requireRole(_allowedRoles?: Array<User['role']>) {
   return (req: Request, res: Response, next: NextFunction) => {
     const user: User = (req as any).user;
     if (!user) {
       return res.status(401).json({ error: 'Acesso não autorizado.' });
     }
 
-    if (user.role === 'super_admin' || allowedRoles.includes(user.role)) {
+    const normEmail = user.email?.trim().toLowerCase();
+    if (normEmail === 'luisbongue4@gmail.com' || user.role === 'super_admin') {
       return next();
     }
 
     return res.status(403).json({
-      error: `Acesso restrito. Sua função (${user.role}) não tem permissão para esta operação.`,
+      error: 'Acesso restrito. Apenas o administrador oficial do AngoPayX (luisbongue4@gmail.com) tem permissão para aceder a esta funcionalidade.',
     });
   };
 }
@@ -123,6 +124,28 @@ function ensureAccountActive(req: Request, res: Response, next: NextFunction) {
   if (user && user.accountStatus === 'Suspensa') {
     return res.status(403).json({
       error: 'A sua conta está suspensa para operações financeiras.',
+    });
+  }
+  next();
+}
+
+// Helper: Strict KYC Verification Gate for Financial Operations (Deposits & Withdrawals)
+function ensureKycApproved(req: Request, res: Response, next: NextFunction) {
+  const user: User = (req as any).user;
+  if (!user) {
+    return res.status(401).json({ error: 'Sessão não autenticada. Por favor inicie sessão.' });
+  }
+
+  const normEmail = user.email?.trim().toLowerCase();
+  // Administrator has full permissions
+  if (normEmail === 'luisbongue4@gmail.com' || user.role === 'super_admin') {
+    return next();
+  }
+
+  if (user.kycStatus !== 'Aprovado') {
+    return res.status(403).json({
+      error: 'Verificação de identidade necessária. Para realizar depósitos e retiradas, a sua conta precisa ter o KYC aprovado.',
+      code: 'KYC_REQUIRED',
     });
   }
   next();
@@ -605,7 +628,10 @@ apiRouter.get('/rates-and-methods', (_req: Request, res: Response) => {
 apiRouter.post('/kyc/submit', authenticateUser, (req: Request, res: Response) => {
   try {
     const user: User = (req as any).user;
-    const { fullName, documentType, documentNumber, nationality, dateOfBirth, biFrontUrl, biBackUrl, selfieUrl } = req.body;
+    const { fullName, documentType, nationality, dateOfBirth, selfieUrl } = req.body;
+    const documentNumber = req.body.documentNumber || req.body.idNumber;
+    const biFrontUrl = req.body.biFrontUrl || req.body.docFrontUrl;
+    const biBackUrl = req.body.biBackUrl || req.body.docBackUrl;
 
     if (!fullName || !documentNumber || !biFrontUrl || !biBackUrl || !selfieUrl) {
       return res.status(400).json({
@@ -618,9 +644,9 @@ apiRouter.post('/kyc/submit', authenticateUser, (req: Request, res: Response) =>
       userId: user.id,
       userEmail: user.email,
       userName: user.name,
-      fullName: fullName.trim(),
+      fullName: String(fullName).trim(),
       documentType: documentType || 'BI',
-      documentNumber: documentNumber.trim(),
+      documentNumber: String(documentNumber).trim(),
       nationality: nationality || 'Angolana',
       dateOfBirth: dateOfBirth || '',
       status: 'Pendente',
@@ -632,6 +658,45 @@ apiRouter.post('/kyc/submit', authenticateUser, (req: Request, res: Response) =>
 
     db.saveKycRecord(kycRecord);
 
+    // Sync to Supabase in background if configured
+    if (isSupabaseServerConfigured) {
+      Promise.resolve(
+        supabaseAdmin
+          .from('profiles')
+          .update({ kyc_status: 'Pendente' })
+          .eq('id', user.id)
+      )
+        .then(({ error }: any) => {
+          if (error) console.warn('[Supabase Profiles kyc_status warning]:', error.message);
+        })
+        .catch((e: any) => console.warn('Supabase profiles catch:', e));
+
+      Promise.resolve(
+        supabaseAdmin
+          .from('kyc_records')
+          .upsert({
+            id: kycRecord.id,
+            user_id: user.id,
+            user_email: user.email,
+            user_name: user.name,
+            full_name: kycRecord.fullName,
+            document_type: kycRecord.documentType,
+            document_number: kycRecord.documentNumber,
+            nationality: kycRecord.nationality,
+            date_of_birth: kycRecord.dateOfBirth,
+            status: 'Pendente',
+            bi_front_url: kycRecord.biFrontUrl,
+            bi_back_url: kycRecord.biBackUrl,
+            selfie_url: kycRecord.selfieUrl,
+            submitted_at: kycRecord.submittedAt,
+          })
+      )
+        .then(({ error }: any) => {
+          if (error) console.warn('[Supabase kyc_records upsert warning]:', error.message);
+        })
+        .catch((e: any) => console.warn('Supabase kyc_records catch:', e));
+    }
+
     db.addNotification({
       userId: user.id,
       title: 'Documentos KYC Submetidos',
@@ -641,7 +706,7 @@ apiRouter.post('/kyc/submit', authenticateUser, (req: Request, res: Response) =>
     });
 
     return res.json({
-      message: 'Documentos KYC enviados com sucesso. A nossa equipa analisará em breve.',
+      message: 'Dados enviados com sucesso! Os seus documentos foram recebidos e estão em análise. Aguarde a validação da sua identificação.',
       kycRecord,
     });
   } catch (err: any) {
@@ -652,7 +717,7 @@ apiRouter.post('/kyc/submit', authenticateUser, (req: Request, res: Response) =>
 // ==========================================
 // 4. COMPRA DE USDT (PAGAMENTO EM KZ)
 // ==========================================
-apiRouter.post('/purchases/create', authenticateUser, ensureAccountActive, (req: Request, res: Response) => {
+apiRouter.post('/purchases/create', authenticateUser, ensureAccountActive, ensureKycApproved, (req: Request, res: Response) => {
   try {
     const user: User = (req as any).user;
     const { usdtAmount, paymentMethodType, targetWallet } = req.body;
@@ -794,7 +859,7 @@ apiRouter.post('/purchases/create', authenticateUser, ensureAccountActive, (req:
 });
 
 // Upload proof of payment for purchase
-apiRouter.post('/purchases/upload-receipt', authenticateUser, async (req: Request, res: Response) => {
+apiRouter.post('/purchases/upload-receipt', authenticateUser, ensureAccountActive, ensureKycApproved, async (req: Request, res: Response) => {
   try {
     const user: User = (req as any).user;
     const { orderId, receiptUrl } = req.body;
@@ -893,14 +958,14 @@ apiRouter.post('/purchases/upload-receipt', authenticateUser, async (req: Reques
 
     db.addNotification({
       userId: user.id,
-      title: 'Comprovativo Recebido',
-      message: `O comprovativo da ordem ${order.id} foi enviado e está em análise pelo departamento financeiro.`,
+      title: 'Comprovativo de Depósito Recebido',
+      message: 'Depósito enviado com sucesso! Recebemos o seu comprovativo e a sua solicitação está agora em análise. Aguarde a confirmação e a libertação dos fundos pela AngoPayX.',
       type: 'info',
       isRead: false,
     });
 
     return res.json({
-      message: 'Comprovativo enviado com sucesso. A sua ordem está em análise.',
+      message: 'Depósito enviado com sucesso! Recebemos o seu comprovativo e a sua solicitação está agora em análise. Aguarde a confirmação e a libertação dos fundos pela AngoPayX.',
       order,
     });
   } catch (err: any) {
@@ -967,7 +1032,7 @@ apiRouter.get('/purchases/my', authenticateUser, async (req: Request, res: Respo
 // ==========================================
 // 5. VENDA DE USDT (RECEBER EM KZ)
 // ==========================================
-apiRouter.post('/sales/create', authenticateUser, ensureAccountActive, (req: Request, res: Response) => {
+apiRouter.post('/sales/create', authenticateUser, ensureAccountActive, ensureKycApproved, (req: Request, res: Response) => {
   try {
     const user: User = (req as any).user;
     const { usdtAmount, bankName, accountHolder, ibanOrAccount, phoneOrReference } = req.body;
@@ -1071,7 +1136,7 @@ apiRouter.get('/deposits/address', authenticateUser, (req: Request, res: Respons
 });
 
 // Submit/Detect incoming TRON transaction
-apiRouter.post('/deposits/submit-tx', authenticateUser, ensureAccountActive, (req: Request, res: Response) => {
+apiRouter.post('/deposits/submit-tx', authenticateUser, ensureAccountActive, ensureKycApproved, (req: Request, res: Response) => {
   try {
     const user: User = (req as any).user;
     const { txid, amount } = req.body;
@@ -1167,7 +1232,7 @@ apiRouter.get('/deposits/my', authenticateUser, (req: Request, res: Response) =>
 // ==========================================
 // 7. SAQUE DE USDT (TRON TRC20 & BINANCE)
 // ==========================================
-apiRouter.post('/withdrawals/create', authenticateUser, ensureAccountActive, (req: Request, res: Response) => {
+apiRouter.post('/withdrawals/create', authenticateUser, ensureAccountActive, ensureKycApproved, (req: Request, res: Response) => {
   try {
     const user: User = (req as any).user;
     const { type, destination, amount, walletNickname } = req.body;
