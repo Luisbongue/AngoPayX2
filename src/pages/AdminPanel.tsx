@@ -580,6 +580,22 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
+  const isSoleAdmin = Boolean(user && user.email?.trim().toLowerCase() === 'luisbongue4@gmail.com');
+
+  if (!isSoleAdmin) {
+    return (
+      <div className="p-8 max-w-xl mx-auto rounded-2xl bg-slate-900 border border-rose-500/30 text-center space-y-4 my-12">
+        <div className="w-14 h-14 mx-auto rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+          <Lock className="w-7 h-7" />
+        </div>
+        <h2 className="text-xl font-bold text-white">Acesso Restrito ao Administrador Oficial</h2>
+        <p className="text-xs text-slate-400 leading-relaxed">
+          Apenas o administrador oficial do AngoPayX (<strong>luisbongue4@gmail.com</strong>) tem autorização para aceder ao painel de controlo, aprovação de KYC, ordens e configurações.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Top Banner with Role Indicators */}

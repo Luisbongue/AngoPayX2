@@ -17,8 +17,13 @@ import { apiClient } from '../services/api.ts';
 import { DepositOrder } from '../types/index.ts';
 import { QrCodeView } from '../components/QrCodeView.tsx';
 import { TRON_USDT_CONTRACT } from '../server/tronUtils.ts';
+import { KycRequiredBanner } from '../components/KycRequiredBanner.tsx';
 
-export const DepositPage: React.FC = () => {
+interface DepositPageProps {
+  onNavigate?: (tab: string) => void;
+}
+
+export const DepositPage: React.FC<DepositPageProps> = ({ onNavigate }) => {
   const { user, refreshUser } = useAuth();
   const [depositData, setDepositData] = useState<{
     asset: string;
@@ -69,10 +74,19 @@ export const DepositPage: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const isSoleAdmin = user?.email?.toLowerCase() === 'luisbongue4@gmail.com';
+  const isKycApproved = Boolean(isSoleAdmin || user?.kycStatus === 'Aprovado');
+
   const handleSimulateBlockchainDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
     setVerifyError(null);
     setVerifySuccess(null);
+
+    if (!isKycApproved) {
+      setVerifyError('Verificação de identidade necessária. Para realizar depósitos e retiradas, a sua conta precisa ter o KYC aprovado.');
+      return;
+    }
+
     setVerifying(true);
 
     try {
@@ -140,6 +154,11 @@ export const DepositPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* KYC Required Banner when KYC not approved */}
+      {user && !isKycApproved && (
+        <KycRequiredBanner onNavigate={onNavigate} operationName="depósitos e transferências de fundos" />
+      )}
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -262,11 +281,21 @@ export const DepositPage: React.FC = () => {
 
                 <button
                   type="submit"
-                  disabled={verifying || !txidInput}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2"
+                  disabled={verifying || !isKycApproved || !txidInput}
+                  className={`w-full py-2.5 rounded-xl text-xs font-bold shadow-md transition flex items-center justify-center gap-2 ${
+                    !isKycApproved
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                  }`}
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${verifying ? 'animate-spin' : ''}`} />
-                  <span>{verifying ? 'A validar na rede TRON...' : 'Validar Transação e Creditar Saldo'}</span>
+                  <span>
+                    {verifying
+                      ? 'A validar na rede TRON...'
+                      : !isKycApproved
+                      ? 'KYC Obrigatório para Validar Depósitos'
+                      : 'Validar Transação e Creditar Saldo'}
+                  </span>
                 </button>
               </form>
             </div>

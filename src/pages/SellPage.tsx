@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../context/AuthContext.tsx';
 import { apiClient } from '../services/api.ts';
 import { ExchangeSettings, SaleOrder } from '../types/index.ts';
+import { KycRequiredBanner } from '../components/KycRequiredBanner.tsx';
 
 const ANGOLAN_BANKS = [
   'Banco Angolano de Investimentos (BAI)',
@@ -26,7 +27,11 @@ const ANGOLAN_BANKS = [
   'Outro Banco Nacional / EMIS',
 ];
 
-export const SellPage: React.FC = () => {
+interface SellPageProps {
+  onNavigate?: (tab: string) => void;
+}
+
+export const SellPage: React.FC<SellPageProps> = ({ onNavigate }) => {
   const { user, balance, refreshUser } = useAuth();
   const [usdtAmount, setUsdtAmount] = useState<number>(50);
   const [exchange, setExchange] = useState<ExchangeSettings>({ buyRateKz: 1350, sellRateKz: 1250, updatedAt: '', updatedBy: '' });
@@ -70,10 +75,18 @@ export const SellPage: React.FC = () => {
   const feeKz = 0; // Current Rule: 0 Kz withdrawal fee
   const totalKzToReceive = Math.round(usdtAmount * sellRateKz - feeKz);
 
+  const isSoleAdmin = user?.email?.toLowerCase() === 'luisbongue4@gmail.com';
+  const isKycApproved = Boolean(isSoleAdmin || user?.kycStatus === 'Aprovado');
+
   const handleCreateSale = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    if (!isKycApproved) {
+      setError('Verificação de identidade necessária. Para realizar depósitos e retiradas, a sua conta precisa ter o KYC aprovado.');
+      return;
+    }
 
     if (usdtAmount <= 0) {
       setError('A quantidade de USDT a vender deve ser maior que zero.');
@@ -146,6 +159,11 @@ export const SellPage: React.FC = () => {
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>{success}</span>
         </div>
+      )}
+
+      {/* KYC Required Banner when KYC not approved */}
+      {user && !isKycApproved && (
+        <KycRequiredBanner onNavigate={onNavigate} operationName="retiradas e levantamentos de fundos" />
       )}
 
       {/* Main Grid */}
@@ -284,10 +302,18 @@ export const SellPage: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={loading || usdtAmount <= 0 || usdtAmount > availableBalance}
-                className="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-amber-600/30 transition flex items-center justify-center gap-2"
+                disabled={loading || !isKycApproved || usdtAmount <= 0 || usdtAmount > availableBalance}
+                className={`w-full py-3.5 rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center gap-2 ${
+                  !isKycApproved
+                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                    : 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30'
+                }`}
               >
-                {loading ? 'A processar ordem...' : 'Confirmar Venda e Receber Kwanzas'}
+                {loading
+                  ? 'A processar ordem...'
+                  : !isKycApproved
+                  ? 'KYC Obrigatório para Retiradas'
+                  : 'Confirmar Venda e Receber Kwanzas'}
                 <ArrowRight className="w-4 h-4" />
               </button>
             </form>

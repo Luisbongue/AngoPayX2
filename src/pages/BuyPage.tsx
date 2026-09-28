@@ -68,6 +68,9 @@ export const BuyPage: React.FC<BuyPageProps> = ({ onNavigate }) => {
   const [receiptDataUrl, setReceiptDataUrl] = useState<string>('');
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
 
+  const isSoleAdmin = user?.email?.toLowerCase() === 'luisbongue4@gmail.com';
+  const isKycApproved = Boolean(isSoleAdmin || user?.kycStatus === 'Aprovado');
+
   useEffect(() => {
     loadConfig();
     if (user) {

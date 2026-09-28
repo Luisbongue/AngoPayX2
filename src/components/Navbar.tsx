@@ -80,7 +80,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onOpe
     { id: 'privacy', label: 'Privacidade', icon: Lock },
   ];
 
-  const isAdminUser = user && user.role !== 'client';
+  const isAdminUser = Boolean(user && user.email?.trim().toLowerCase() === 'luisbongue4@gmail.com');
 
   return (
     <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800">

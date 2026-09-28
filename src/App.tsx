@@ -41,19 +41,19 @@ function AppContent() {
           />
         );
       case 'buy':
-        return <BuyPage />;
+        return <BuyPage onNavigate={(tab) => setCurrentTab(tab)} />;
       case 'sell':
-        return <SellPage />;
+        return <SellPage onNavigate={(tab) => setCurrentTab(tab)} />;
       case 'deposit':
-        return <DepositPage />;
+        return <DepositPage onNavigate={(tab) => setCurrentTab(tab)} />;
       case 'withdraw':
-        return <WithdrawPage />;
+        return <WithdrawPage onNavigate={(tab) => setCurrentTab(tab)} />;
       case 'wallets':
         return <WalletsPage />;
       case 'history':
         return <HistoryPage />;
       case 'kyc':
-        return <KycPage />;
+        return <KycPage onNavigate={(tab) => setCurrentTab(tab)} />;
       case 'profile':
         return <ProfilePage onNavigate={(tab) => setCurrentTab(tab)} />;
       case 'notifications':
