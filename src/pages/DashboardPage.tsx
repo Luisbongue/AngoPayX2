@@ -76,7 +76,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const approxKz = Math.round(availableUsdt * rates.sellRateKz);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full overflow-hidden box-border">
       {/* Welcome Banner / KYC Notice */}
       {user ? (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border border-slate-800 shadow-sm">
@@ -167,37 +167,37 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           )}
 
           {/* Quick Action Buttons */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-3 border-t border-slate-800/80">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 pt-3 border-t border-slate-800/80">
             <button
               onClick={() => onNavigate('buy')}
-              className="flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition"
+              className="flex items-center justify-center gap-1.5 py-2.5 px-2 sm:py-3 sm:px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] sm:text-xs font-bold shadow-md shadow-emerald-600/20 transition truncate"
             >
-              <ArrowDownLeft className="w-4 h-4" />
-              <span>Comprar / Carregar</span>
+              <ArrowDownLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="truncate">Comprar</span>
             </button>
 
             <button
               onClick={() => onNavigate('sell')}
-              className="flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-md shadow-amber-600/20 transition"
+              className="flex items-center justify-center gap-1.5 py-2.5 px-2 sm:py-3 sm:px-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-[11px] sm:text-xs font-bold shadow-md shadow-amber-600/20 transition truncate"
             >
-              <ArrowUpRight className="w-4 h-4" />
-              <span>Vender USDT</span>
+              <ArrowUpRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="truncate">Vender</span>
             </button>
 
             <button
               onClick={() => onNavigate('deposit')}
-              className="flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+              className="flex items-center justify-center gap-1.5 py-2.5 px-2 sm:py-3 sm:px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] sm:text-xs font-semibold border border-slate-700 transition truncate"
             >
-              <Download className="w-4 h-4 text-emerald-400" />
-              <span>Depositar</span>
+              <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
+              <span className="truncate">Depositar</span>
             </button>
 
             <button
               onClick={() => onNavigate('withdraw')}
-              className="flex items-center justify-center gap-2 py-3 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+              className="flex items-center justify-center gap-1.5 py-2.5 px-2 sm:py-3 sm:px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] sm:text-xs font-semibold border border-slate-700 transition truncate"
             >
-              <Upload className="w-4 h-4 text-amber-400" />
-              <span>Sacar USDT</span>
+              <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400 shrink-0" />
+              <span className="truncate">Sacar</span>
             </button>
           </div>
         </div>

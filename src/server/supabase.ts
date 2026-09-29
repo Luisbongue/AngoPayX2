@@ -44,3 +44,34 @@ export async function verifySupabaseToken(token: string) {
     return null;
   }
 }
+
+export async function ensureSupabaseBuckets() {
+  if (!isSupabaseServerConfigured) return;
+  try {
+    const { data: buckets } = await supabaseAdmin.storage.listBuckets();
+    const existing = new Set((buckets || []).map((b) => b.id));
+
+    if (!existing.has('kyc-documents')) {
+      await supabaseAdmin.storage.createBucket('kyc-documents', {
+        public: false,
+        fileSizeLimit: 20 * 1024 * 1024,
+      });
+      console.log('[Supabase Storage] Bucket privado "kyc-documents" assegurado.');
+    }
+
+    if (!existing.has('purchase-proofs')) {
+      await supabaseAdmin.storage.createBucket('purchase-proofs', {
+        public: false,
+        fileSizeLimit: 20 * 1024 * 1024,
+      });
+      console.log('[Supabase Storage] Bucket privado "purchase-proofs" assegurado.');
+    }
+  } catch (err: any) {
+    console.warn('[Supabase Storage] Aviso ao verificar buckets:', err?.message);
+  }
+}
+
+// Executar verificação na inicialização se configurado
+if (isSupabaseServerConfigured) {
+  ensureSupabaseBuckets().catch(() => {});
+}

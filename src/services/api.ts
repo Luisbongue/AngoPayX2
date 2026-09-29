@@ -51,30 +51,46 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`/api${endpoint}`, {
-    ...options,
-    headers,
-  });
+  // AbortController with 40s timeout so network requests never stall indefinitely
+  const controller = new AbortController();
+  const timeoutMs = 40000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const signal = options.signal || controller.signal;
 
-  const data = await res.json().catch(() => ({}));
+  try {
+    const res = await fetch(`/api${endpoint}`, {
+      ...options,
+      headers,
+      signal,
+    });
 
-  if (!res.ok) {
-    const errorMsg =
-      data.error ||
-      data.message ||
-      (res.status === 404
-        ? `Serviço não encontrado (404) em ${endpoint}.`
-        : res.status === 401
-        ? 'Não autorizado (401). Sessão expirada ou credenciais inválidas.'
-        : res.status === 403
-        ? 'Acesso negado (403).'
-        : res.status === 500
-        ? 'Erro interno do servidor (500).'
-        : `Erro de comunicação HTTP ${res.status} ao contactar o servidor.`);
-    throw new Error(errorMsg);
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const errorMsg =
+        data.error ||
+        data.message ||
+        (res.status === 404
+          ? `Serviço não encontrado (404) em ${endpoint}.`
+          : res.status === 401
+          ? 'Não autorizado (401). Sessão expirada ou credenciais inválidas.'
+          : res.status === 403
+          ? 'Acesso negado (403).'
+          : res.status === 500
+          ? 'Erro interno do servidor (500).'
+          : `Erro de comunicação HTTP ${res.status} ao contactar o servidor.`);
+      throw new Error(errorMsg);
+    }
+
+    return data as T;
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('O pedido excedeu o tempo limite (40s). Verifique a sua ligação à internet.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return data as T;
 }
 
 export const apiClient = {
@@ -120,6 +136,17 @@ export const apiClient = {
   }>('/rates-and-methods'),
 
   // KYC
+  uploadKycDocument: (payload: {
+    documentType: 'bi-frente' | 'bi-verso' | 'selfie';
+    fileName: string;
+    contentType: string;
+    base64Data: string;
+  }) =>
+    request<{ success: boolean; path: string; bucket: string; message: string }>('/kyc/upload-document', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
   submitKyc: (payload: any) => request<{ message: string; kycRecord: KycRecord }>('/kyc/submit', {
     method: 'POST',
     body: JSON.stringify(payload),

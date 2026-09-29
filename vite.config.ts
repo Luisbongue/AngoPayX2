@@ -22,7 +22,9 @@ export default defineConfig(() => {
       port: 3000,
       host: '0.0.0.0',
       hmr: process.env.DISABLE_HMR !== 'true',
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      watch: process.env.DISABLE_HMR === 'true' ? null : {
+        ignored: ['**/data/**', '**/angopayx-database.json', '**/*.zip', '**/public/*.zip'],
+      },
     },
     build: {
       outDir: path.resolve(__dirname, 'dist'),

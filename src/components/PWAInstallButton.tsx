@@ -50,11 +50,12 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
     <>
       <button
         onClick={handleClick}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition shadow-sm cursor-pointer ${className}`}
+        className={`flex items-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition shadow-sm cursor-pointer shrink-0 ${className}`}
         title="Instalar AngoPayX no seu dispositivo"
       >
-        <Download className="w-3.5 h-3.5 animate-bounce" />
-        <span>Instalar App</span>
+        <Download className="w-3.5 h-3.5 animate-bounce shrink-0" />
+        <span className="hidden sm:inline">Instalar App</span>
+        <span className="sm:hidden text-[10px]">App</span>
       </button>
       <InstallAppModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </>

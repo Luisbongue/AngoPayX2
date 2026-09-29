@@ -43,16 +43,25 @@ export interface KycRecord {
   nationality: string;
   dateOfBirth: string;
   status: KycStatus;
+  statusSlug?: 'pending' | 'approved' | 'rejected';
+  biFrontPath?: string;
+  biBackPath?: string;
+  selfiePath?: string;
   biFrontUrl: string;
   docFrontUrl?: string; // alias
   biBackUrl: string;
   docBackUrl?: string; // alias
   selfieUrl: string;
+  biFrontSignedUrl?: string;
+  biBackSignedUrl?: string;
+  selfieSignedUrl?: string;
   adminNotes?: string;
   notes?: string; // alias
+  rejectionReason?: string;
   reviewedBy?: string;
   reviewedAt?: string;
   submittedAt: string;
+  updatedAt?: string;
 }
 
 export interface Balance {

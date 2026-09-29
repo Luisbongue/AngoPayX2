@@ -80,7 +80,7 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950 w-full max-w-full overflow-x-hidden box-border">
       <Navbar
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
@@ -90,13 +90,13 @@ function AppContent() {
       {/* Top Banner Advertisement (Rotativo) */}
       <TopAdBanner onOpenAdvertiseModal={() => setIsAdvertiseModalOpen(true)} />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 box-border overflow-hidden">
         {renderContent()}
       </main>
 
       {/* Professional Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950 text-slate-400 text-xs py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+      <footer className="border-t border-slate-900 bg-slate-950 text-slate-400 text-xs py-8 w-full max-w-full overflow-hidden box-border">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-6 w-full box-border">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-extrabold text-sm">

@@ -24,7 +24,7 @@ import type {
 } from '../types/index.ts';
 
 export const apiRouter = express.Router();
-apiRouter.use(express.json({ limit: '15mb' }));
+apiRouter.use(express.json({ limit: '35mb' }));
 
 // Helper: Extract current user from Authorization header (Supabase JWT or secure session token)
 async function authenticateUser(req: Request, res: Response, next: NextFunction) {
@@ -592,16 +592,60 @@ apiRouter.post('/auth/reset-password', async (req: Request, res: Response) => {
   }
 });
 
-// Current User Details & Balance
-apiRouter.get('/auth/me', authenticateUser, (req: Request, res: Response) => {
+// Helper: Gerar URL assinada segura e temporária do Supabase Storage
+async function getSignedUrlForPath(path?: string, expiresInSeconds = 3600): Promise<string | undefined> {
+  if (!path) return undefined;
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+    return path;
+  }
+  if (!isSupabaseServerConfigured) return undefined;
+
+  const bucket = path.startsWith('kyc/kyc/') || path.startsWith('purchases/') ? 'purchase-proofs' : 'kyc-documents';
+  try {
+    const { data, error } = await supabaseAdmin.storage.from(bucket).createSignedUrl(path, expiresInSeconds);
+    if (!error && data?.signedUrl) {
+      return data.signedUrl;
+    }
+  } catch (_) {}
+
+  // Fallback para bucket alternativo
+  try {
+    const altBucket = bucket === 'kyc-documents' ? 'purchase-proofs' : 'kyc-documents';
+    const { data } = await supabaseAdmin.storage.from(altBucket).createSignedUrl(path, expiresInSeconds);
+    if (data?.signedUrl) {
+      return data.signedUrl;
+    }
+  } catch (_) {}
+
+  return undefined;
+}
+
+// Current User Details & Balance (com URLs assinadas reais dos próprios documentos KYC do utilizador)
+apiRouter.get('/auth/me', authenticateUser, async (req: Request, res: Response) => {
   const user: User = (req as any).user;
   const balance = db.getBalance(user.id);
   const kyc = db.getKycRecord(user.id);
 
+  let kycWithSignedUrls = kyc;
+  if (kyc && isSupabaseServerConfigured) {
+    const [biFrontSignedUrl, biBackSignedUrl, selfieSignedUrl] = await Promise.all([
+      getSignedUrlForPath(kyc.biFrontPath || kyc.biFrontUrl),
+      getSignedUrlForPath(kyc.biBackPath || kyc.biBackUrl),
+      getSignedUrlForPath(kyc.selfiePath || kyc.selfieUrl),
+    ]);
+
+    kycWithSignedUrls = {
+      ...kyc,
+      biFrontSignedUrl: biFrontSignedUrl || kyc.biFrontUrl,
+      biBackSignedUrl: biBackSignedUrl || kyc.biBackUrl,
+      selfieSignedUrl: selfieSignedUrl || kyc.selfieUrl,
+    };
+  }
+
   return res.json({
     user,
     balance,
-    kyc,
+    kyc: kycWithSignedUrls,
   });
 });
 
@@ -623,24 +667,105 @@ apiRouter.get('/rates-and-methods', (_req: Request, res: Response) => {
 });
 
 // ==========================================
-// 3. KYC (VERIFICAÇÃO DE IDENTIDADE MANUAL)
+// 3. KYC (VERIFICAÇÃO DE IDENTIDADE COM SUPABASE STORAGE REAL)
 // ==========================================
-apiRouter.post('/kyc/submit', authenticateUser, (req: Request, res: Response) => {
+
+// Upload real de cada documento individual para o Supabase Storage (bucket privado 'kyc-documents')
+apiRouter.post('/kyc/upload-document', authenticateUser, async (req: Request, res: Response) => {
   try {
     const user: User = (req as any).user;
-    const { fullName, documentType, nationality, dateOfBirth, selfieUrl } = req.body;
-    const documentNumber = req.body.documentNumber || req.body.idNumber;
-    const biFrontUrl = req.body.biFrontUrl || req.body.docFrontUrl;
-    const biBackUrl = req.body.biBackUrl || req.body.docBackUrl;
+    const { documentType, fileName, contentType, base64Data } = req.body;
 
-    if (!fullName || !documentNumber || !biFrontUrl || !biBackUrl || !selfieUrl) {
+    if (!documentType || !['bi-frente', 'bi-verso', 'selfie'].includes(documentType)) {
+      return res.status(400).json({ error: 'Tipo de documento inválido. Deve ser bi-frente, bi-verso ou selfie.' });
+    }
+
+    if (!base64Data) {
+      return res.status(400).json({ error: 'Dados do ficheiro não foram fornecidos.' });
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+    const validContentType = allowedTypes.includes(contentType) ? contentType : 'image/jpeg';
+
+    // Remove any data URL scheme prefix if present
+    const base64Clean = base64Data.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
+    const buffer = Buffer.from(base64Clean, 'base64');
+
+    if (buffer.length === 0) {
+      return res.status(400).json({ error: 'Ficheiro de imagem corrompido ou vazio.' });
+    }
+
+    if (buffer.length > 12 * 1024 * 1024) {
+      return res.status(400).json({ error: 'O ficheiro excede o tamanho limite de 10MB.' });
+    }
+
+    const cleanFileName = (fileName || `${documentType}.jpg`).replace(/[^a-zA-Z0-9.-]/g, '_');
+    // Pasta estruturada obrigatória: kyc/{user_id}/bi-frente, bi-verso, selfie
+    const storagePath = `kyc/${user.id}/${documentType}/${Date.now()}-${cleanFileName}`;
+
+    let uploadedPath = storagePath;
+
+    if (isSupabaseServerConfigured) {
+      // 1. Tentar upload no bucket privado kyc-documents com supabaseAdmin (permissão total segura)
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from('kyc-documents')
+        .upload(storagePath, buffer, {
+          contentType: validContentType,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.warn(`[Supabase Storage KYC Upload Warning - ${documentType}]:`, uploadError.message);
+        // 2. Fallback de contingência para purchase-proofs
+        const { error: fallbackError } = await supabaseAdmin.storage
+          .from('purchase-proofs')
+          .upload(`kyc/${storagePath}`, buffer, {
+            contentType: validContentType,
+            upsert: true,
+          });
+
+        if (fallbackError) {
+          throw new Error(`Falha ao carregar documento (${documentType}) no Supabase Storage: ${uploadError.message}`);
+        }
+        uploadedPath = `kyc/${storagePath}`;
+      }
+    }
+
+    return res.json({
+      success: true,
+      path: uploadedPath,
+      bucket: 'kyc-documents',
+      message: `Documento ${documentType} enviado com sucesso para o Supabase Storage.`,
+    });
+  } catch (err: any) {
+    console.error('[Upload KYC Doc Error]:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao processar upload do documento.' });
+  }
+});
+
+apiRouter.post('/kyc/submit', authenticateUser, async (req: Request, res: Response) => {
+  try {
+    const user: User = (req as any).user;
+    const { fullName, documentType, nationality, dateOfBirth } = req.body;
+    const documentNumber = req.body.documentNumber || req.body.idNumber;
+    
+    // File paths no Supabase Storage ou URLs
+    const biFrontPath = req.body.biFrontPath || req.body.biFrontUrl || req.body.docFrontUrl;
+    const biBackPath = req.body.biBackPath || req.body.biBackUrl || req.body.docBackUrl;
+    const selfiePath = req.body.selfiePath || req.body.selfieUrl;
+
+    if (!fullName || !documentNumber || !biFrontPath || !biBackPath || !selfiePath) {
       return res.status(400).json({
         error: 'Todos os campos de identificação e os 3 documentos (BI frente, BI verso e selfie) são obrigatórios.',
       });
     }
 
+    // Prevenir duplicados: verificar se o utilizador já tem registo prévio (Req #12)
+    const existingRecord = db.getKycRecord(user.id);
+    const now = new Date().toISOString();
+
     const kycRecord: KycRecord = {
-      id: `kyc-${crypto.randomUUID().slice(0, 8)}`,
+      id: existingRecord?.id || `kyc-${crypto.randomUUID().slice(0, 8)}`,
       userId: user.id,
       userEmail: user.email,
       userName: user.name,
@@ -650,29 +775,61 @@ apiRouter.post('/kyc/submit', authenticateUser, (req: Request, res: Response) =>
       nationality: nationality || 'Angolana',
       dateOfBirth: dateOfBirth || '',
       status: 'Pendente',
-      biFrontUrl,
-      biBackUrl,
-      selfieUrl,
-      submittedAt: new Date().toISOString(),
+      statusSlug: 'pending',
+      biFrontPath,
+      biBackPath,
+      selfiePath,
+      biFrontUrl: biFrontPath,
+      biBackUrl: biBackPath,
+      selfieUrl: selfiePath,
+      submittedAt: existingRecord?.submittedAt || now,
+      updatedAt: now,
+      adminNotes: '',
     };
 
+    // Guardar no banco de dados local com persistência
     db.saveKycRecord(kycRecord);
 
-    // Sync to Supabase in background if configured
+    // Sincronizar com Supabase Storage e Supabase Auth
     if (isSupabaseServerConfigured) {
-      Promise.resolve(
-        supabaseAdmin
+      // 1. Guardar metadados do registo KYC em JSON no Supabase Storage
+      try {
+        const metadataBuffer = Buffer.from(JSON.stringify(kycRecord, null, 2), 'utf-8');
+        await supabaseAdmin.storage
+          .from('kyc-documents')
+          .upload(`kyc/${user.id}/submission.json`, metadataBuffer, {
+            contentType: 'application/json',
+            upsert: true,
+          });
+      } catch (jsonErr: any) {
+        console.warn('[Supabase Storage submission.json]:', jsonErr?.message);
+      }
+
+      // 2. Atualizar perfil e user_metadata no Supabase Auth
+      try {
+        await supabaseAdmin.auth.admin.updateUserById(user.id, {
+          user_metadata: {
+            kycStatus: 'Pendente',
+            kycStatusSlug: 'pending',
+            kycRecordId: kycRecord.id,
+            kycSubmittedAt: now,
+          },
+        });
+      } catch (authMetaErr: any) {
+        console.warn('[Supabase Auth update KYC metadata]:', authMetaErr?.message);
+      }
+
+      // 3. Atualizar tabela profiles (se existir)
+      try {
+        await supabaseAdmin
           .from('profiles')
           .update({ kyc_status: 'Pendente' })
-          .eq('id', user.id)
-      )
-        .then(({ error }: any) => {
-          if (error) console.warn('[Supabase Profiles kyc_status warning]:', error.message);
-        })
-        .catch((e: any) => console.warn('Supabase profiles catch:', e));
+          .eq('id', user.id);
+      } catch (_) {}
 
-      Promise.resolve(
-        supabaseAdmin
+      // 4. Inserir ou atualizar na tabela kyc_records do Supabase (Req #5)
+      try {
+        await supabaseAdmin
           .from('kyc_records')
           .upsert({
             id: kycRecord.id,
@@ -684,29 +841,28 @@ apiRouter.post('/kyc/submit', authenticateUser, (req: Request, res: Response) =>
             document_number: kycRecord.documentNumber,
             nationality: kycRecord.nationality,
             date_of_birth: kycRecord.dateOfBirth,
-            status: 'Pendente',
-            bi_front_url: kycRecord.biFrontUrl,
-            bi_back_url: kycRecord.biBackUrl,
-            selfie_url: kycRecord.selfieUrl,
+            status: 'pending',
+            bi_frente_path: kycRecord.biFrontPath,
+            bi_verso_path: kycRecord.biBackPath,
+            selfie_path: kycRecord.selfiePath,
             submitted_at: kycRecord.submittedAt,
-          })
-      )
-        .then(({ error }: any) => {
-          if (error) console.warn('[Supabase kyc_records upsert warning]:', error.message);
-        })
-        .catch((e: any) => console.warn('Supabase kyc_records catch:', e));
+            updated_at: kycRecord.updatedAt,
+          });
+      } catch (supaKycErr: any) {
+        console.warn('[Supabase kyc_records table upsert]:', supaKycErr?.message);
+      }
     }
 
     db.addNotification({
       userId: user.id,
       title: 'Documentos KYC Submetidos',
-      message: 'Os seus documentos de identidade foram recebidos pela equipa de compliance e estão em análise.',
+      message: 'Os seus documentos foram recebidos com sucesso e estão em análise pela equipa AngoPayX.',
       type: 'info',
       isRead: false,
     });
 
     return res.json({
-      message: 'Dados enviados com sucesso! Os seus documentos foram recebidos e estão em análise. Aguarde a validação da sua identificação.',
+      message: '✓ Documentos enviados com sucesso. A sua documentação foi recebida e está aguardando validação.',
       kycRecord,
     });
   } catch (err: any) {
@@ -1569,13 +1725,45 @@ apiRouter.post(
   }
 );
 
-// Admin: KYC List & Action
+// Admin: KYC List & Action (com URLs assinadas reais do Supabase Storage)
 apiRouter.get(
   '/admin/kyc/list',
   authenticateUser,
   requireRole(['super_admin', 'kyc_admin', 'auditor']),
-  (_req: Request, res: Response) => {
-    return res.json({ kycRecords: db.getRawData().kycRecords });
+  async (_req: Request, res: Response) => {
+    try {
+      const records = db.getRawData().kycRecords;
+      const recordsWithSignedUrls = await Promise.all(
+        records.map(async (k) => {
+          let biFrontSignedUrl = k.biFrontUrl;
+          let biBackSignedUrl = k.biBackUrl;
+          let selfieSignedUrl = k.selfieUrl;
+
+          if (isSupabaseServerConfigured) {
+            const [frontSigned, backSigned, selfieSigned] = await Promise.all([
+              getSignedUrlForPath(k.biFrontPath || k.biFrontUrl),
+              getSignedUrlForPath(k.biBackPath || k.biBackUrl),
+              getSignedUrlForPath(k.selfiePath || k.selfieUrl),
+            ]);
+
+            if (frontSigned) biFrontSignedUrl = frontSigned;
+            if (backSigned) biBackSignedUrl = backSigned;
+            if (selfieSigned) selfieSignedUrl = selfieSigned;
+          }
+
+          return {
+            ...k,
+            biFrontSignedUrl,
+            biBackSignedUrl,
+            selfieSignedUrl,
+          };
+        })
+      );
+
+      return res.json({ kycRecords: recordsWithSignedUrls });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Erro ao carregar lista de KYC.' });
+    }
   }
 );
 
@@ -1583,7 +1771,7 @@ apiRouter.post(
   '/admin/kyc/action',
   authenticateUser,
   requireRole(['super_admin', 'kyc_admin']),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const admin: User = (req as any).user;
       const { kycId, action, notes } = req.body;
@@ -1591,21 +1779,79 @@ apiRouter.post(
       const record = db.getRawData().kycRecords.find((k) => k.id === kycId);
       if (!record) return res.status(404).json({ error: 'Registo KYC não encontrado.' });
 
+      const now = new Date().toISOString();
       record.reviewedBy = admin.email;
-      record.reviewedAt = new Date().toISOString();
+      record.reviewedAt = now;
+      record.updatedAt = now;
       record.adminNotes = notes || '';
 
       if (action === 'approve') {
         record.status = 'Aprovado';
+        record.statusSlug = 'approved';
       } else if (action === 'reject') {
         record.status = 'Rejeitado';
+        record.statusSlug = 'rejected';
+        record.rejectionReason = notes || 'Documentação não aprovada na conformidade';
       } else if (action === 'request_more') {
         record.status = 'Documentos adicionais necessários';
+        record.statusSlug = 'pending';
       } else {
         return res.status(400).json({ error: 'Ação inválida.' });
       }
 
       db.saveKycRecord(record);
+
+      // Sincronizar com Supabase Auth e Supabase Storage
+      if (isSupabaseServerConfigured) {
+        // 1. Atualizar user_metadata no Supabase Auth
+        try {
+          await supabaseAdmin.auth.admin.updateUserById(record.userId, {
+            user_metadata: {
+              kycStatus: record.status,
+              kycStatusSlug: record.statusSlug,
+              kycReviewedAt: now,
+              kycReviewedBy: admin.email,
+              rejectionReason: record.rejectionReason || null,
+            },
+          });
+        } catch (e: any) {
+          console.warn('[Supabase Auth update KYC action]:', e?.message);
+        }
+
+        // 2. Atualizar ficheiro submission.json no Supabase Storage
+        try {
+          await supabaseAdmin.storage
+            .from('kyc-documents')
+            .upload(`kyc/${record.userId}/submission.json`, Buffer.from(JSON.stringify(record, null, 2)), {
+              contentType: 'application/json',
+              upsert: true,
+            });
+        } catch (e: any) {
+          console.warn('[Supabase Storage submission.json update]:', e?.message);
+        }
+
+        // 3. Atualizar tabela profiles (se existir)
+        try {
+          await supabaseAdmin
+            .from('profiles')
+            .update({ kyc_status: record.status })
+            .eq('id', record.userId);
+        } catch (_) {}
+
+        // 4. Atualizar tabela kyc_records (se existir)
+        try {
+          await supabaseAdmin
+            .from('kyc_records')
+            .update({
+              status: record.statusSlug,
+              reviewed_by: admin.email,
+              reviewed_at: now,
+              rejection_reason: record.rejectionReason || null,
+              updated_at: now,
+            })
+            .eq('id', record.id);
+        } catch (_) {}
+      }
 
       db.logAudit({
         adminId: admin.id,
