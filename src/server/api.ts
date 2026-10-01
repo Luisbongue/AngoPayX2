@@ -1,8 +1,10 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import crypto from 'node:crypto';
+import multer from 'multer';
 import { db, hashPassword, getRoleForEmail } from './storage.ts';
 import { verifySupabaseToken, isSupabaseServerConfigured, supabaseAdmin } from './supabase.ts';
+import { saveKycDocuments, saveKycDocumentSingle, getKycDocument, deleteKycDocuments } from './kycStorage.ts';
 import {
   validateTronAddress,
   validateBinanceIdentifier,
@@ -25,6 +27,11 @@ import type {
 
 export const apiRouter = express.Router();
 apiRouter.use(express.json({ limit: '35mb' }));
+
+const kycUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB max per document
+});
 
 // Helper: Extract current user from Authorization header (Supabase JWT or secure session token)
 async function authenticateUser(req: Request, res: Response, next: NextFunction) {
@@ -592,60 +599,64 @@ apiRouter.post('/auth/reset-password', async (req: Request, res: Response) => {
   }
 });
 
-// Helper: Gerar URL assinada segura e temporária do Supabase Storage
+// Helper: Obter URL assinada temporária para visualização segura de documentos privados
 async function getSignedUrlForPath(path?: string, expiresInSeconds = 3600): Promise<string | undefined> {
   if (!path) return undefined;
   if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
     return path;
   }
-  if (!isSupabaseServerConfigured) return undefined;
-
-  const bucket = path.startsWith('kyc/kyc/') || path.startsWith('purchases/') ? 'purchase-proofs' : 'kyc-documents';
+  if (path.startsWith('/api/kyc/document/')) {
+    return path;
+  }
+  if (!isSupabaseServerConfigured) {
+    return path;
+  }
   try {
-    const { data, error } = await supabaseAdmin.storage.from(bucket).createSignedUrl(path, expiresInSeconds);
+    const isProof = path.startsWith('purchase-proofs');
+    const bucket = isProof ? 'purchase-proofs' : 'kyc-documents';
+    const cleanPath = path
+      .replace(/^kyc-documents\//, '')
+      .replace(/^purchase-proofs\//, '');
+
+    const { data, error } = await supabaseAdmin.storage
+      .from(bucket)
+      .createSignedUrl(cleanPath, expiresInSeconds);
+
     if (!error && data?.signedUrl) {
       return data.signedUrl;
     }
-  } catch (_) {}
-
-  // Fallback para bucket alternativo
-  try {
-    const altBucket = bucket === 'kyc-documents' ? 'purchase-proofs' : 'kyc-documents';
-    const { data } = await supabaseAdmin.storage.from(altBucket).createSignedUrl(path, expiresInSeconds);
-    if (data?.signedUrl) {
-      return data.signedUrl;
+    if (error) {
+      console.warn('[Supabase createSignedUrl warn]:', error.message);
     }
-  } catch (_) {}
-
-  return undefined;
+  } catch (err: any) {
+    console.warn('[getSignedUrlForPath catch]:', err?.message || err);
+  }
+  return path;
 }
 
-// Current User Details & Balance (com URLs assinadas reais dos próprios documentos KYC do utilizador)
+// Current User Details & Balance
 apiRouter.get('/auth/me', authenticateUser, async (req: Request, res: Response) => {
   const user: User = (req as any).user;
   const balance = db.getBalance(user.id);
   const kyc = db.getKycRecord(user.id);
 
-  let kycWithSignedUrls = kyc;
-  if (kyc && isSupabaseServerConfigured) {
-    const [biFrontSignedUrl, biBackSignedUrl, selfieSignedUrl] = await Promise.all([
-      getSignedUrlForPath(kyc.biFrontPath || kyc.biFrontUrl),
-      getSignedUrlForPath(kyc.biBackPath || kyc.biBackUrl),
-      getSignedUrlForPath(kyc.selfiePath || kyc.selfieUrl),
-    ]);
-
-    kycWithSignedUrls = {
+  let formattedKyc = kyc;
+  if (kyc) {
+    const biFrontSignedUrl = await getSignedUrlForPath(kyc.biFrontPath);
+    const biBackSignedUrl = await getSignedUrlForPath(kyc.biBackPath);
+    const selfieSignedUrl = await getSignedUrlForPath(kyc.selfiePath);
+    formattedKyc = {
       ...kyc,
-      biFrontSignedUrl: biFrontSignedUrl || kyc.biFrontUrl,
-      biBackSignedUrl: biBackSignedUrl || kyc.biBackUrl,
-      selfieSignedUrl: selfieSignedUrl || kyc.selfieUrl,
+      biFrontSignedUrl: biFrontSignedUrl || `/api/kyc/document/${user.id}/bi-frente`,
+      biBackSignedUrl: biBackSignedUrl || `/api/kyc/document/${user.id}/bi-verso`,
+      selfieSignedUrl: selfieSignedUrl || `/api/kyc/document/${user.id}/selfie`,
     };
   }
 
   return res.json({
     user,
     balance,
-    kyc: kycWithSignedUrls,
+    kyc: formattedKyc,
   });
 });
 
@@ -667,208 +678,353 @@ apiRouter.get('/rates-and-methods', (_req: Request, res: Response) => {
 });
 
 // ==========================================
-// 3. KYC (VERIFICAÇÃO DE IDENTIDADE COM SUPABASE STORAGE REAL)
+// 3. KYC (COFRE PRIVADO DIRETO DO ANGOPAYX - SEM SUPABASE)
 // ==========================================
 
-// Upload real de cada documento individual para o Supabase Storage (bucket privado 'kyc-documents')
-apiRouter.post('/kyc/upload-document', authenticateUser, async (req: Request, res: Response) => {
+// Visualização privada e autenticada de documento KYC (Apenas Administrador ou o Próprio Cliente)
+apiRouter.get('/kyc/document/:userId/:docType', authenticateUser, (req: Request, res: Response) => {
   try {
     const user: User = (req as any).user;
-    const { documentType, fileName, contentType, base64Data } = req.body;
+    const { userId, docType } = req.params;
 
-    if (!documentType || !['bi-frente', 'bi-verso', 'selfie'].includes(documentType)) {
-      return res.status(400).json({ error: 'Tipo de documento inválido. Deve ser bi-frente, bi-verso ou selfie.' });
+    if (!['bi-frente', 'bi-verso', 'selfie'].includes(docType)) {
+      return res.status(400).json({ error: 'Tipo de documento inválido.' });
     }
 
-    if (!base64Data) {
-      return res.status(400).json({ error: 'Dados do ficheiro não foram fornecidos.' });
+    const normEmail = user.email?.trim().toLowerCase();
+    const isAdmin = normEmail === 'luisbongue4@gmail.com' || user.role === 'super_admin';
+
+    // Regra estrita de privacidade: Apenas o super_admin autorizado ou o titular do documento podem aceder
+    if (!isAdmin && user.id !== userId) {
+      return res.status(403).json({ error: 'Acesso restrito. Não possui permissão para visualizar este documento.' });
     }
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
-    const validContentType = allowedTypes.includes(contentType) ? contentType : 'image/jpeg';
-
-    // Remove any data URL scheme prefix if present
-    const base64Clean = base64Data.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
-    const buffer = Buffer.from(base64Clean, 'base64');
-
-    if (buffer.length === 0) {
-      return res.status(400).json({ error: 'Ficheiro de imagem corrompido ou vazio.' });
+    const doc = getKycDocument(userId, docType as 'bi-frente' | 'bi-verso' | 'selfie');
+    if (!doc) {
+      return res.status(404).json({ error: 'Documento não encontrado no cofre do sistema.' });
     }
 
-    if (buffer.length > 12 * 1024 * 1024) {
-      return res.status(400).json({ error: 'O ficheiro excede o tamanho limite de 10MB.' });
-    }
+    res.setHeader('Content-Type', doc.mimeType);
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    return res.sendFile(doc.filePath);
+  } catch (err: any) {
+    console.error('[KYC Document Serve Error]:', err);
+    return res.status(500).json({ error: 'Erro ao carregar documento.' });
+  }
+});
 
-    const cleanFileName = (fileName || `${documentType}.jpg`).replace(/[^a-zA-Z0-9.-]/g, '_');
-    // Pasta estruturada obrigatória: kyc/{user_id}/bi-frente, bi-verso, selfie
-    const storagePath = `kyc/${user.id}/${documentType}/${Date.now()}-${cleanFileName}`;
+// Upload individual de documento KYC para o Supabase Storage privado e Cofre de Segurança
+apiRouter.post(
+  '/kyc/upload-document',
+  authenticateUser,
+  async (req: Request, res: Response) => {
+    try {
+      const user: User = (req as any).user;
 
-    let uploadedPath = storagePath;
-
-    if (isSupabaseServerConfigured) {
-      // 1. Tentar upload no bucket privado kyc-documents com supabaseAdmin (permissão total segura)
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from('kyc-documents')
-        .upload(storagePath, buffer, {
-          contentType: validContentType,
-          upsert: true,
+      if (user.kycStatus === 'Pendente') {
+        return res.status(400).json({
+          error: 'A sua documentação já foi enviada e encontra-se em análise. Não é permitido novo envio.',
+          code: 'KYC_ALREADY_PENDING',
         });
+      }
+      if (user.kycStatus === 'Aprovado') {
+        return res.status(400).json({
+          error: 'A sua conta já possui verificação de identidade (KYC) aprovada.',
+          code: 'KYC_ALREADY_APPROVED',
+        });
+      }
 
-      if (uploadError) {
-        console.warn(`[Supabase Storage KYC Upload Warning - ${documentType}]:`, uploadError.message);
-        // 2. Fallback de contingência para purchase-proofs
-        const { error: fallbackError } = await supabaseAdmin.storage
-          .from('purchase-proofs')
-          .upload(`kyc/${storagePath}`, buffer, {
-            contentType: validContentType,
-            upsert: true,
-          });
+      const { documentType, fileName, contentType, base64Data } = req.body;
+      if (!documentType || !['bi-frente', 'bi-verso', 'selfie'].includes(documentType)) {
+        return res.status(400).json({ error: 'Tipo de documento inválido.' });
+      }
+      if (!base64Data) {
+        return res.status(400).json({ error: 'Conteúdo do documento não fornecido.' });
+      }
 
-        if (fallbackError) {
-          throw new Error(`Falha ao carregar documento (${documentType}) no Supabase Storage: ${uploadError.message}`);
+      const cleanB64 = base64Data.replace(/^data:[a-zA-Z0-9/+-]+;base64,/, '');
+      const buffer = Buffer.from(cleanB64, 'base64');
+
+      if (buffer.length === 0) {
+        return res.status(400).json({ error: 'Ficheiro vazio ou corrompido.' });
+      }
+
+      if (buffer.length > 10 * 1024 * 1024) {
+        return res.status(400).json({ error: 'O ficheiro excede o tamanho máximo permitido de 10MB.' });
+      }
+
+      // MIME type strictly matching Supabase allowed_mime_types: ["image/png", "image/jpeg", "image/jpg", "image/webp"]
+      let resolvedMime = 'image/jpeg';
+      const declaredMime = (contentType || '').toLowerCase();
+      const ext = (fileName || '').split('.').pop()?.toLowerCase();
+
+      if (declaredMime.includes('png') || ext === 'png') {
+        resolvedMime = 'image/png';
+      } else if (declaredMime.includes('webp') || ext === 'webp') {
+        resolvedMime = 'image/webp';
+      } else {
+        resolvedMime = 'image/jpeg';
+      }
+
+      const storageExt = resolvedMime === 'image/png' ? 'png' : resolvedMime === 'image/webp' ? 'webp' : 'jpg';
+      const storagePath = `kyc/${user.id}/${documentType}.${storageExt}`;
+
+      // Upload para Supabase Storage privado (usando service_role admin para contornar restrições RLS de upload do cliente)
+      if (isSupabaseServerConfigured) {
+        try {
+          const { error: sbError } = await supabaseAdmin.storage
+            .from('kyc-documents')
+            .upload(storagePath, buffer, {
+              contentType: resolvedMime,
+              upsert: true,
+            });
+
+          if (sbError) {
+            console.error('[Supabase Storage Upload Error Details]:', {
+              message: sbError.message,
+              storagePath,
+              resolvedMime,
+            });
+          }
+        } catch (sbErr: any) {
+          console.error('[Supabase Storage Upload Exception]:', sbErr?.message || sbErr);
         }
-        uploadedPath = `kyc/${storagePath}`;
       }
-    }
 
-    return res.json({
-      success: true,
-      path: uploadedPath,
-      bucket: 'kyc-documents',
-      message: `Documento ${documentType} enviado com sucesso para o Supabase Storage.`,
-    });
-  } catch (err: any) {
-    console.error('[Upload KYC Doc Error]:', err);
-    return res.status(500).json({ error: err.message || 'Erro ao processar upload do documento.' });
-  }
-});
+      // Guardar também no cofre de ficheiros local do AngoPayX
+      saveKycDocumentSingle(
+        user.id,
+        documentType as 'bi-frente' | 'bi-verso' | 'selfie',
+        buffer,
+        fileName || `${documentType}.${storageExt}`,
+        resolvedMime
+      );
 
-apiRouter.post('/kyc/submit', authenticateUser, async (req: Request, res: Response) => {
-  try {
-    const user: User = (req as any).user;
-    const { fullName, documentType, nationality, dateOfBirth } = req.body;
-    const documentNumber = req.body.documentNumber || req.body.idNumber;
-    
-    // File paths no Supabase Storage ou URLs
-    const biFrontPath = req.body.biFrontPath || req.body.biFrontUrl || req.body.docFrontUrl;
-    const biBackPath = req.body.biBackPath || req.body.biBackUrl || req.body.docBackUrl;
-    const selfiePath = req.body.selfiePath || req.body.selfieUrl;
-
-    if (!fullName || !documentNumber || !biFrontPath || !biBackPath || !selfiePath) {
-      return res.status(400).json({
-        error: 'Todos os campos de identificação e os 3 documentos (BI frente, BI verso e selfie) são obrigatórios.',
+      return res.json({
+        success: true,
+        message: 'Documento enviado com sucesso.',
+        path: storagePath,
       });
+    } catch (err: any) {
+      console.error('[KYC Upload Document Error]:', err);
+      return res.status(500).json({ error: err.message || 'Erro ao processar envio do documento.' });
     }
-
-    // Prevenir duplicados: verificar se o utilizador já tem registo prévio (Req #12)
-    const existingRecord = db.getKycRecord(user.id);
-    const now = new Date().toISOString();
-
-    const kycRecord: KycRecord = {
-      id: existingRecord?.id || `kyc-${crypto.randomUUID().slice(0, 8)}`,
-      userId: user.id,
-      userEmail: user.email,
-      userName: user.name,
-      fullName: String(fullName).trim(),
-      documentType: documentType || 'BI',
-      documentNumber: String(documentNumber).trim(),
-      nationality: nationality || 'Angolana',
-      dateOfBirth: dateOfBirth || '',
-      status: 'Pendente',
-      statusSlug: 'pending',
-      biFrontPath,
-      biBackPath,
-      selfiePath,
-      biFrontUrl: biFrontPath,
-      biBackUrl: biBackPath,
-      selfieUrl: selfiePath,
-      submittedAt: existingRecord?.submittedAt || now,
-      updatedAt: now,
-      adminNotes: '',
-    };
-
-    // Guardar no banco de dados local com persistência
-    db.saveKycRecord(kycRecord);
-
-    // Sincronizar com Supabase Storage e Supabase Auth
-    if (isSupabaseServerConfigured) {
-      // 1. Guardar metadados do registo KYC em JSON no Supabase Storage
-      try {
-        const metadataBuffer = Buffer.from(JSON.stringify(kycRecord, null, 2), 'utf-8');
-        await supabaseAdmin.storage
-          .from('kyc-documents')
-          .upload(`kyc/${user.id}/submission.json`, metadataBuffer, {
-            contentType: 'application/json',
-            upsert: true,
-          });
-      } catch (jsonErr: any) {
-        console.warn('[Supabase Storage submission.json]:', jsonErr?.message);
-      }
-
-      // 2. Atualizar perfil e user_metadata no Supabase Auth
-      try {
-        await supabaseAdmin.auth.admin.updateUserById(user.id, {
-          user_metadata: {
-            kycStatus: 'Pendente',
-            kycStatusSlug: 'pending',
-            kycRecordId: kycRecord.id,
-            kycSubmittedAt: now,
-          },
-        });
-      } catch (authMetaErr: any) {
-        console.warn('[Supabase Auth update KYC metadata]:', authMetaErr?.message);
-      }
-
-      // 3. Atualizar tabela profiles (se existir)
-      try {
-        await supabaseAdmin
-          .from('profiles')
-          .update({ kyc_status: 'Pendente' })
-          .eq('id', user.id);
-      } catch (_) {}
-
-      // 4. Inserir ou atualizar na tabela kyc_records do Supabase (Req #5)
-      try {
-        await supabaseAdmin
-          .from('kyc_records')
-          .upsert({
-            id: kycRecord.id,
-            user_id: user.id,
-            user_email: user.email,
-            user_name: user.name,
-            full_name: kycRecord.fullName,
-            document_type: kycRecord.documentType,
-            document_number: kycRecord.documentNumber,
-            nationality: kycRecord.nationality,
-            date_of_birth: kycRecord.dateOfBirth,
-            status: 'pending',
-            bi_frente_path: kycRecord.biFrontPath,
-            bi_verso_path: kycRecord.biBackPath,
-            selfie_path: kycRecord.selfiePath,
-            submitted_at: kycRecord.submittedAt,
-            updated_at: kycRecord.updatedAt,
-          });
-      } catch (supaKycErr: any) {
-        console.warn('[Supabase kyc_records table upsert]:', supaKycErr?.message);
-      }
-    }
-
-    db.addNotification({
-      userId: user.id,
-      title: 'Documentos KYC Submetidos',
-      message: 'Os seus documentos foram recebidos com sucesso e estão em análise pela equipa AngoPayX.',
-      type: 'info',
-      isRead: false,
-    });
-
-    return res.json({
-      message: '✓ Documentos enviados com sucesso. A sua documentação foi recebida e está aguardando validação.',
-      kycRecord,
-    });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Erro ao submeter documentos KYC.' });
   }
-});
+);
+
+// Submissão direta de KYC (Suporta multipart/form-data, JSON e referências a caminhos pré-enviados)
+apiRouter.post(
+  '/kyc/submit',
+  authenticateUser,
+  kycUpload.fields([
+    { name: 'bi_frente', maxCount: 1 },
+    { name: 'bi_verso', maxCount: 1 },
+    { name: 'selfie', maxCount: 1 },
+    { name: 'biFront', maxCount: 1 },
+    { name: 'biBack', maxCount: 1 },
+  ]),
+  async (req: Request, res: Response) => {
+    try {
+      const user: User = (req as any).user;
+
+      // Regra de Integridade: Não permitir novo envio enquanto estiver Pendente ou Aprovado
+      if (user.kycStatus === 'Pendente') {
+        return res.status(400).json({
+          error: 'A sua documentação já foi enviada e encontra-se em análise. Aguarde a avaliação pelo administrador.',
+          code: 'KYC_ALREADY_PENDING',
+        });
+      }
+      if (user.kycStatus === 'Aprovado') {
+        return res.status(400).json({
+          error: 'A sua conta já possui verificação de identidade (KYC) aprovada.',
+          code: 'KYC_ALREADY_APPROVED',
+        });
+      }
+
+      const files = (req.files as Record<string, Express.Multer.File[]>) || {};
+      const biFrontFile = files['bi_frente']?.[0] || files['biFront']?.[0];
+      const biBackFile = files['bi_verso']?.[0] || files['biBack']?.[0];
+      const selfieFile = files['selfie']?.[0];
+
+      // Suporte tanto a ficheiros multipart enviados nativamente como a base64 direto
+      let biFrontRaw: { buffer: Buffer; fileName: string; contentType: string } | null = null;
+      let biBackRaw: { buffer: Buffer; fileName: string; contentType: string } | null = null;
+      let selfieRaw: { buffer: Buffer; fileName: string; contentType: string } | null = null;
+
+      if (biFrontFile) {
+        biFrontRaw = { buffer: biFrontFile.buffer, fileName: biFrontFile.originalname, contentType: biFrontFile.mimetype };
+      } else if (req.body.biFront?.base64Data || req.body.bi_frente_base64) {
+        const b64 = (req.body.biFront?.base64Data || req.body.bi_frente_base64).replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
+        biFrontRaw = { buffer: Buffer.from(b64, 'base64'), fileName: req.body.biFront?.fileName || 'bi-frente.jpg', contentType: req.body.biFront?.contentType || 'image/jpeg' };
+      }
+
+      if (biBackFile) {
+        biBackRaw = { buffer: biBackFile.buffer, fileName: biBackFile.originalname, contentType: biBackFile.mimetype };
+      } else if (req.body.biBack?.base64Data || req.body.bi_verso_base64) {
+        const b64 = (req.body.biBack?.base64Data || req.body.bi_verso_base64).replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
+        biBackRaw = { buffer: Buffer.from(b64, 'base64'), fileName: req.body.biBack?.fileName || 'bi-verso.jpg', contentType: req.body.biBack?.contentType || 'image/jpeg' };
+      }
+
+      if (selfieFile) {
+        selfieRaw = { buffer: selfieFile.buffer, fileName: selfieFile.originalname, contentType: selfieFile.mimetype };
+      } else if (req.body.selfie?.base64Data || req.body.selfie_base64) {
+        const b64 = (req.body.selfie?.base64Data || req.body.selfie_base64).replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
+        selfieRaw = { buffer: Buffer.from(b64, 'base64'), fileName: req.body.selfie?.fileName || 'selfie.jpg', contentType: req.body.selfie?.contentType || 'image/jpeg' };
+      }
+
+      // Caminhos pré-enviados (caso tenham sido carregados via /kyc/upload-document)
+      let finalFrontPath = req.body.biFrontPath || req.body.biFrentePath || req.body.bi_frente_path || '';
+      let finalBackPath = req.body.biBackPath || req.body.biVersoPath || req.body.bi_verso_path || '';
+      let finalSelfiePath = req.body.selfiePath || req.body.selfie_path || '';
+
+      // Se ficheiros brutos foram fornecidos na chamada, efetuar upload e gravação
+      if (biFrontRaw) {
+        const ext = biFrontRaw.contentType.includes('png') ? 'png' : biFrontRaw.contentType.includes('webp') ? 'webp' : 'jpg';
+        const p = `kyc/${user.id}/bi-frente.${ext}`;
+        if (isSupabaseServerConfigured) {
+          try {
+            await supabaseAdmin.storage.from('kyc-documents').upload(p, biFrontRaw.buffer, {
+              contentType: ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg',
+              upsert: true,
+            });
+          } catch (_) {}
+        }
+        saveKycDocumentSingle(user.id, 'bi-frente', biFrontRaw.buffer, biFrontRaw.fileName, biFrontRaw.contentType);
+        finalFrontPath = p;
+      }
+
+      if (biBackRaw) {
+        const ext = biBackRaw.contentType.includes('png') ? 'png' : biBackRaw.contentType.includes('webp') ? 'webp' : 'jpg';
+        const p = `kyc/${user.id}/bi-verso.${ext}`;
+        if (isSupabaseServerConfigured) {
+          try {
+            await supabaseAdmin.storage.from('kyc-documents').upload(p, biBackRaw.buffer, {
+              contentType: ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg',
+              upsert: true,
+            });
+          } catch (_) {}
+        }
+        saveKycDocumentSingle(user.id, 'bi-verso', biBackRaw.buffer, biBackRaw.fileName, biBackRaw.contentType);
+        finalBackPath = p;
+      }
+
+      if (selfieRaw) {
+        const ext = selfieRaw.contentType.includes('png') ? 'png' : selfieRaw.contentType.includes('webp') ? 'webp' : 'jpg';
+        const p = `kyc/${user.id}/selfie.${ext}`;
+        if (isSupabaseServerConfigured) {
+          try {
+            await supabaseAdmin.storage.from('kyc-documents').upload(p, selfieRaw.buffer, {
+              contentType: ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg',
+              upsert: true,
+            });
+          } catch (_) {}
+        }
+        saveKycDocumentSingle(user.id, 'selfie', selfieRaw.buffer, selfieRaw.fileName, selfieRaw.contentType);
+        finalSelfiePath = p;
+      }
+
+      const existingRecord = db.getKycRecord(user.id);
+      if (!finalFrontPath && existingRecord?.biFrontPath) finalFrontPath = existingRecord.biFrontPath;
+      if (!finalBackPath && existingRecord?.biBackPath) finalBackPath = existingRecord.biBackPath;
+      if (!finalSelfiePath && existingRecord?.selfiePath) finalSelfiePath = existingRecord.selfiePath;
+
+      if (!finalFrontPath) {
+        return res.status(400).json({ error: 'O ficheiro de BI (Frente) é obrigatório.' });
+      }
+      if (!finalBackPath) {
+        return res.status(400).json({ error: 'O ficheiro de BI (Verso) é obrigatório.' });
+      }
+      if (!finalSelfiePath) {
+        return res.status(400).json({ error: 'A fotografia tipo Selfie com o BI é obrigatória.' });
+      }
+
+      const fullName = (req.body.fullName || req.body.name || user.name || '').trim();
+      const documentNumber = (req.body.documentNumber || req.body.idNumber || '').trim();
+      const nationality = (req.body.nationality || 'Angolana').trim();
+      const dateOfBirth = (req.body.dateOfBirth || '').trim();
+
+      if (!fullName) {
+        return res.status(400).json({ error: 'Nome Completo conforme o Bilhete de Identidade é obrigatório.' });
+      }
+      if (!documentNumber) {
+        return res.status(400).json({ error: 'Número do Bilhete de Identidade (BI) é obrigatório.' });
+      }
+
+      const now = new Date().toISOString();
+
+      const kycRecord: KycRecord = {
+        id: existingRecord?.id || `kyc-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        fullName,
+        documentType: 'BI',
+        documentNumber,
+        nationality,
+        dateOfBirth,
+        status: 'Pendente',
+        statusSlug: 'pending',
+        biFrontPath: finalFrontPath,
+        biBackPath: finalBackPath,
+        selfiePath: finalSelfiePath,
+        biFrontUrl: finalFrontPath,
+        biBackUrl: finalBackPath,
+        selfieUrl: finalSelfiePath,
+        submittedAt: existingRecord?.submittedAt || now,
+        updatedAt: now,
+        adminNotes: '',
+      };
+
+      db.saveKycRecord(kycRecord);
+
+      // Atualizar estado KYC do utilizador para 'Pendente'
+      const targetUser = db.findUserById(user.id);
+      if (targetUser) {
+        targetUser.kycStatus = 'Pendente';
+        db.updateUser(targetUser);
+      }
+
+      db.addNotification({
+        userId: user.id,
+        title: 'Documentos KYC Recebidos',
+        message: 'A sua documentação foi enviada para análise pela equipa AngoPayX.',
+        type: 'info',
+        isRead: false,
+      });
+
+      // Notificação em tempo real para o painel Admin no canal 'kyc-admin' (evento: new_kyc_submission)
+      if (isSupabaseServerConfigured) {
+        try {
+          const realtimeChannel = supabaseAdmin.channel('kyc-admin');
+          await realtimeChannel.send({
+            type: 'broadcast',
+            event: 'new_kyc_submission',
+            payload: {
+              user_id: user.id,
+              user_name: user.name,
+              user_email: user.email,
+              submitted_at: now,
+              bi_frente_path: finalFrontPath,
+              bi_verso_path: finalBackPath,
+              selfie_path: finalSelfiePath,
+            },
+          });
+        } catch (rtErr: any) {
+          console.warn('[Realtime Broadcast Admin]:', rtErr?.message || rtErr);
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: '✓ Documentação enviada com sucesso.\nA sua documentação foi enviada para análise.',
+        kycRecord,
+      });
+    } catch (err: any) {
+      console.error('[KYC Submit Error]:', err);
+      return res.status(500).json({ error: err.message || 'Erro ao processar submissão de KYC.' });
+    }
+  }
+);
 
 // ==========================================
 // 4. COMPRA DE USDT (PAGAMENTO EM KZ)
@@ -1725,7 +1881,7 @@ apiRouter.post(
   }
 );
 
-// Admin: KYC List & Action (com URLs assinadas reais do Supabase Storage)
+// Admin: KYC List & Action (Cofre Local AngoPayX e Visualização Privada com URLs assinadas)
 apiRouter.get(
   '/admin/kyc/list',
   authenticateUser,
@@ -1733,34 +1889,29 @@ apiRouter.get(
   async (_req: Request, res: Response) => {
     try {
       const records = db.getRawData().kycRecords;
-      const recordsWithSignedUrls = await Promise.all(
+      const formattedRecords = await Promise.all(
         records.map(async (k) => {
-          let biFrontSignedUrl = k.biFrontUrl;
-          let biBackSignedUrl = k.biBackUrl;
-          let selfieSignedUrl = k.selfieUrl;
+          const biFrontLocal = `/api/kyc/document/${k.userId}/bi-frente`;
+          const biBackLocal = `/api/kyc/document/${k.userId}/bi-verso`;
+          const selfieLocal = `/api/kyc/document/${k.userId}/selfie`;
 
-          if (isSupabaseServerConfigured) {
-            const [frontSigned, backSigned, selfieSigned] = await Promise.all([
-              getSignedUrlForPath(k.biFrontPath || k.biFrontUrl),
-              getSignedUrlForPath(k.biBackPath || k.biBackUrl),
-              getSignedUrlForPath(k.selfiePath || k.selfieUrl),
-            ]);
-
-            if (frontSigned) biFrontSignedUrl = frontSigned;
-            if (backSigned) biBackSignedUrl = backSigned;
-            if (selfieSigned) selfieSignedUrl = selfieSigned;
-          }
+          const biFrontSigned = (await getSignedUrlForPath(k.biFrontPath)) || biFrontLocal;
+          const biBackSigned = (await getSignedUrlForPath(k.biBackPath)) || biBackLocal;
+          const selfieSigned = (await getSignedUrlForPath(k.selfiePath)) || selfieLocal;
 
           return {
             ...k,
-            biFrontSignedUrl,
-            biBackSignedUrl,
-            selfieSignedUrl,
+            biFrontUrl: biFrontSigned,
+            biBackUrl: biBackSigned,
+            selfieUrl: selfieSigned,
+            biFrontSignedUrl: biFrontSigned,
+            biBackSignedUrl: biBackSigned,
+            selfieSignedUrl: selfieSigned,
           };
         })
       );
 
-      return res.json({ kycRecords: recordsWithSignedUrls });
+      return res.json({ kycRecords: formattedRecords });
     } catch (err: any) {
       return res.status(500).json({ error: err.message || 'Erro ao carregar lista de KYC.' });
     }
@@ -1792,6 +1943,9 @@ apiRouter.post(
         record.status = 'Rejeitado';
         record.statusSlug = 'rejected';
         record.rejectionReason = notes || 'Documentação não aprovada na conformidade';
+      } else if (action === 'in_review') {
+        record.status = 'Em análise';
+        record.statusSlug = 'pending';
       } else if (action === 'request_more') {
         record.status = 'Documentos adicionais necessários';
         record.statusSlug = 'pending';
@@ -1801,56 +1955,11 @@ apiRouter.post(
 
       db.saveKycRecord(record);
 
-      // Sincronizar com Supabase Auth e Supabase Storage
-      if (isSupabaseServerConfigured) {
-        // 1. Atualizar user_metadata no Supabase Auth
-        try {
-          await supabaseAdmin.auth.admin.updateUserById(record.userId, {
-            user_metadata: {
-              kycStatus: record.status,
-              kycStatusSlug: record.statusSlug,
-              kycReviewedAt: now,
-              kycReviewedBy: admin.email,
-              rejectionReason: record.rejectionReason || null,
-            },
-          });
-        } catch (e: any) {
-          console.warn('[Supabase Auth update KYC action]:', e?.message);
-        }
-
-        // 2. Atualizar ficheiro submission.json no Supabase Storage
-        try {
-          await supabaseAdmin.storage
-            .from('kyc-documents')
-            .upload(`kyc/${record.userId}/submission.json`, Buffer.from(JSON.stringify(record, null, 2)), {
-              contentType: 'application/json',
-              upsert: true,
-            });
-        } catch (e: any) {
-          console.warn('[Supabase Storage submission.json update]:', e?.message);
-        }
-
-        // 3. Atualizar tabela profiles (se existir)
-        try {
-          await supabaseAdmin
-            .from('profiles')
-            .update({ kyc_status: record.status })
-            .eq('id', record.userId);
-        } catch (_) {}
-
-        // 4. Atualizar tabela kyc_records (se existir)
-        try {
-          await supabaseAdmin
-            .from('kyc_records')
-            .update({
-              status: record.statusSlug,
-              reviewed_by: admin.email,
-              reviewed_at: now,
-              rejection_reason: record.rejectionReason || null,
-              updated_at: now,
-            })
-            .eq('id', record.id);
-        } catch (_) {}
+      // Atualizar utilizador diretamente
+      const targetUser = db.findUserById(record.userId);
+      if (targetUser) {
+        targetUser.kycStatus = record.status;
+        db.updateUser(targetUser);
       }
 
       db.logAudit({
@@ -1874,6 +1983,76 @@ apiRouter.post(
       return res.json({ message: 'Decisão de KYC gravada com sucesso.', record });
     } catch (err: any) {
       return res.status(500).json({ error: err.message || 'Erro ao processar KYC.' });
+    }
+  }
+);
+
+// Admin: Limpeza / Eliminação de ficheiros do Cofre após análise (Req #9)
+apiRouter.post(
+  '/admin/kyc/delete-storage-files',
+  authenticateUser,
+  requireRole(['super_admin', 'kyc_admin']),
+  async (req: Request, res: Response) => {
+    try {
+      const { kycId } = req.body;
+      const record = db.getRawData().kycRecords.find((k) => k.id === kycId);
+      if (!record) {
+        return res.status(404).json({ error: 'Registo KYC não encontrado.' });
+      }
+
+      // Eliminar do cofre local de ficheiros
+      deleteKycDocuments(record.userId);
+
+      record.biFrontPath = '';
+      record.biBackPath = '';
+      record.selfiePath = '';
+      record.biFrontUrl = '';
+      record.biBackUrl = '';
+      record.selfieUrl = '';
+      db.saveKycRecord(record);
+
+      return res.json({
+        success: true,
+        message: 'Documentos eliminados do cofre de conformidade com sucesso.',
+      });
+    } catch (err: any) {
+      console.error('[Delete Storage Files Error]:', err);
+      return res.status(500).json({ error: err.message || 'Erro ao eliminar ficheiros do Storage.' });
+    }
+  }
+);
+
+// Obter Signed URLs temporárias para visualização privada de documentos
+apiRouter.post(
+  '/kyc/signed-urls',
+  authenticateUser,
+  async (req: Request, res: Response) => {
+    try {
+      const user: User = (req as any).user;
+      const { paths } = req.body;
+      if (!Array.isArray(paths)) {
+        return res.status(400).json({ error: 'O parâmetro paths deve ser um array de caminhos.' });
+      }
+
+      const isAdmin = ['super_admin', 'kyc_admin', 'auditor'].includes(user.role) || user.email === 'luisbongue4@gmail.com';
+      const signedUrls: Record<string, string> = {};
+
+      for (const p of paths) {
+        if (!p || typeof p !== 'string') continue;
+        // Validação de segurança: clientes normais só podem gerar signed URLs dos seus próprios ficheiros
+        if (!isAdmin && !p.startsWith(`kyc/${user.id}/`)) {
+          continue;
+        }
+
+        const signed = await getSignedUrlForPath(p, 3600);
+        if (signed) {
+          signedUrls[p] = signed;
+        }
+      }
+
+      return res.json({ signedUrls });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Erro ao gerar URLs assinadas.' });
     }
   }
 );

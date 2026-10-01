@@ -42,8 +42,9 @@ export function clearStoredToken() {
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getStoredToken();
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers as Record<string, string>),
   };
 
@@ -51,9 +52,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  // AbortController with 40s timeout so network requests never stall indefinitely
+  // AbortController with generous timeout for file uploads (90s for FormData, 40s for others)
   const controller = new AbortController();
-  const timeoutMs = 40000;
+  const timeoutMs = isFormData ? 90000 : 40000;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const signal = options.signal || controller.signal;
 
@@ -136,21 +137,37 @@ export const apiClient = {
   }>('/rates-and-methods'),
 
   // KYC
+  // KYC (Submissão e envio de documentos com conformidade e cofre de segurança)
   uploadKycDocument: (payload: {
     documentType: 'bi-frente' | 'bi-verso' | 'selfie';
     fileName: string;
     contentType: string;
     base64Data: string;
   }) =>
-    request<{ success: boolean; path: string; bucket: string; message: string }>('/kyc/upload-document', {
+    request<{ success: boolean; message: string; path: string }>('/kyc/upload-document', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
 
-  submitKyc: (payload: any) => request<{ message: string; kycRecord: KycRecord }>('/kyc/submit', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  }),
+  getKycSignedUrls: (payload: { paths: string[] }) =>
+    request<{ signedUrls: Record<string, string> }>('/kyc/signed-urls', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  submitKyc: (payload: FormData | any) => {
+    const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData;
+    return request<{ success: boolean; message: string; kycRecord: KycRecord }>('/kyc/submit', {
+      method: 'POST',
+      body: isFormData ? payload : JSON.stringify(payload),
+    });
+  },
+
+  deleteKycStorageFiles: (payload: { kycId?: string; paths?: string[] }) =>
+    request<{ success: boolean; message: string; deletedFiles?: string[] }>('/admin/kyc/delete-storage-files', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
   // Purchases
   createPurchase: (payload: {
@@ -256,7 +273,7 @@ export const apiClient = {
       body: JSON.stringify({ status, note }),
     }),
   getAdminKycList: () => request<{ kycRecords: KycRecord[] }>('/admin/kyc/list'),
-  actionKyc: (payload: { kycId: string; action: 'approve' | 'reject' | 'request_more'; notes?: string }) =>
+  actionKyc: (payload: { kycId: string; action: 'approve' | 'reject' | 'request_more' | 'in_review'; notes?: string }) =>
     request<{ message: string; record: KycRecord }>('/admin/kyc/action', {
       method: 'POST',
       body: JSON.stringify(payload),

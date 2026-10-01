@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { apiClient } from '../services/api.ts';
+import { supabase } from '../lib/supabase.ts';
 import { KycRecord } from '../types/index.ts';
 
 interface KycPageProps {
@@ -223,9 +224,29 @@ export const KycPage: React.FC<KycPageProps> = ({ onNavigate }) => {
         finalSelfiePath = await uploadDocumentReal(selfieFile, 'selfie', 'Selfie com BI');
       }
 
-      // Step 4: Registo oficial no banco de dados e Supabase
-      setUploadStep('A registar verificação de identidade no sistema...');
+      // Step 4: Transmissão em tempo real via Supabase Realtime Broadcast (canal: kyc-admin, evento: new_kyc_submission)
+      setUploadStep('A notificar administração em tempo real...');
+      try {
+        const channel = supabase.channel('kyc-admin');
+        await channel.subscribe();
+        await channel.send({
+          type: 'broadcast',
+          event: 'new_kyc_submission',
+          payload: {
+            user_id: user.id,
+            user_name: user.name,
+            user_email: user.email,
+            submitted_at: new Date().toISOString(),
+            bi_frente_path: finalFrontPath,
+            bi_verso_path: finalBackPath,
+            selfie_path: finalSelfiePath,
+          },
+        });
+      } catch (broadcastErr) {
+        console.warn('[Realtime Broadcast Warning]:', broadcastErr);
+      }
 
+      // Step 5: Enviar metadados e caminhos para a API do AngoPayX (sem gravar em tabela Database)
       const response = await apiClient.submitKyc({
         fullName: fullName.trim(),
         documentType: 'BI',
@@ -245,14 +266,13 @@ export const KycPage: React.FC<KycPageProps> = ({ onNavigate }) => {
       setSelfieFile(null);
 
       setSuccess(
-        response.message ||
-        '✓ Documentos enviados com sucesso. A sua documentação foi recebida e está aguardando validação.'
+        '✓ Documentos enviados com sucesso.\nA sua documentação foi enviada para análise.'
       );
 
       // Refresh global user state to show updated KYC badge
       await refreshUser();
     } catch (err: unknown) {
-      console.error('[KYC Submit Erro]:', err);
+      console.error('[KYC Submit Erro Supabase/Storage/API]:', err);
       const friendlyMessage = getFriendlyErrorMessage(err);
       setError(friendlyMessage);
     } finally {

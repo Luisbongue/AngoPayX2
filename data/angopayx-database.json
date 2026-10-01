@@ -13,181 +13,23 @@
       "createdAt": "2026-09-27T09:27:56.107Z",
       "depositAddressTRC20": "Td255e471aa99c8c5fc10721176eece4c1",
       "lastLoginAt": "2026-09-27T09:27:56.108Z"
-    },
-    {
-      "id": "test-kyc-client-user-999",
-      "name": "Cliente Teste Real",
-      "email": "cliente.kyc.validado@angopayx.ao",
-      "phone": "923000111",
-      "role": "client",
-      "accountStatus": "Ativa",
-      "kycStatus": "Não iniciado",
-      "emailVerified": true,
-      "passwordHash": "d3f96b08b25110a8ee66a9c980345413ec6886a6aedf9f56873edec1e6010aa1",
-      "createdAt": "2026-09-29T07:38:27.226Z",
-      "depositAddressTRC20": "Tkyctestdepositaddress1234567890"
-    },
-    {
-      "id": "usr-d0e0b58e",
-      "name": "Utilizador KYC Real",
-      "email": "real.kyc.user.1790667544321@angopayx.ao",
-      "phone": "923111222",
-      "role": "client",
-      "accountStatus": "Ativa",
-      "kycStatus": "Não iniciado",
-      "emailVerified": false,
-      "verificationCode": "813768",
-      "verificationCodeExpiresAt": "2026-09-29T07:54:04.481Z",
-      "passwordHash": "dd10b37ccf90f4fb46488805be1f30f605d04a153eb36445cff93517db90b67c",
-      "createdAt": "2026-09-29T07:39:07.819Z",
-      "depositAddressTRC20": "Td394a5d1de3a5bcd62b30a512547e7704"
-    },
-    {
-      "id": "usr-05d68afe",
-      "name": "Utilizador KYC Real",
-      "email": "real.kyc.user.1790667560037@angopayx.ao",
-      "phone": "923111222",
-      "role": "client",
-      "accountStatus": "Ativa",
-      "kycStatus": "Aprovado",
-      "emailVerified": true,
-      "passwordHash": "dd10b37ccf90f4fb46488805be1f30f605d04a153eb36445cff93517db90b67c",
-      "createdAt": "2026-09-29T07:39:20.854Z",
-      "depositAddressTRC20": "Tf7e948567935c74943bec83173c41f35b"
-    },
-    {
-      "id": "usr-5fa27ad0",
-      "name": "Manuel Sebastiao Teste",
-      "email": "teste.kyc.user.1790667571039@angopayx.ao",
-      "phone": "923000111",
-      "role": "client",
-      "accountStatus": "Ativa",
-      "kycStatus": "Não iniciado",
-      "emailVerified": true,
-      "passwordHash": "8f482e62d02021c433b06fc26dd1fc9f3c5b99589722744553f7b64d3d7cec5f",
-      "createdAt": "2026-09-29T07:39:31.375Z",
-      "depositAddressTRC20": "Tbfc6b5a297b503496568be13bcea8bd7e"
-    },
-    {
-      "id": "usr-df36f212",
-      "name": "Joao Manuel Teste",
-      "email": "client.angola.1790667610868@angopayx.ao",
-      "phone": "923111222",
-      "role": "client",
-      "accountStatus": "Ativa",
-      "kycStatus": "Aprovado",
-      "emailVerified": true,
-      "passwordHash": "8f482e62d02021c433b06fc26dd1fc9f3c5b99589722744553f7b64d3d7cec5f",
-      "createdAt": "2026-09-29T07:40:11.327Z",
-      "depositAddressTRC20": "Te1450809b554a695fb8a316e84fb22610"
     }
   ],
-  "kycRecords": [
-    {
-      "id": "kyc-15c90ba2",
-      "userId": "usr-df36f212",
-      "userEmail": "client.angola.1790667610868@angopayx.ao",
-      "userName": "Joao Manuel Teste",
-      "fullName": "Joao Manuel Teste",
-      "documentType": "BI",
-      "documentNumber": "008765432LA012",
-      "nationality": "Angolana",
-      "dateOfBirth": "1993-11-25",
-      "status": "Aprovado",
-      "statusSlug": "approved",
-      "biFrontPath": "kyc/usr-df36f212/bi-frente/1790667611448-bi_frente_doc.jpg",
-      "biBackPath": "kyc/usr-df36f212/bi-verso/1790667611641-bi_verso_doc.jpg",
-      "selfiePath": "kyc/usr-df36f212/selfie/1790667611868-selfie_doc.jpg",
-      "biFrontUrl": "kyc/usr-df36f212/bi-frente/1790667611448-bi_frente_doc.jpg",
-      "biBackUrl": "kyc/usr-df36f212/bi-verso/1790667611641-bi_verso_doc.jpg",
-      "selfieUrl": "kyc/usr-df36f212/selfie/1790667611868-selfie_doc.jpg",
-      "submittedAt": "2026-09-29T07:40:12.066Z",
-      "updatedAt": "2026-09-29T07:40:25.548Z",
-      "adminNotes": "BI angolano e selfie conformes com a documentação",
-      "reviewedBy": "luisbongue4@gmail.com",
-      "reviewedAt": "2026-09-29T07:40:25.548Z"
-    },
-    {
-      "id": "kyc-84ef4a4a",
-      "userId": "usr-05d68afe",
-      "userEmail": "real.kyc.user.1790667560037@angopayx.ao",
-      "userName": "Utilizador KYC Real",
-      "fullName": "Utilizador KYC Real",
-      "documentType": "BI",
-      "documentNumber": "007788991LA040",
-      "nationality": "Angolana",
-      "dateOfBirth": "1996-04-12",
-      "status": "Aprovado",
-      "statusSlug": "approved",
-      "biFrontPath": "kyc/usr-05d68afe/bi-frente/1790667560949-bi-frente.jpg",
-      "biBackPath": "kyc/usr-05d68afe/bi-verso/1790667561220-bi-verso.jpg",
-      "selfiePath": "kyc/usr-05d68afe/selfie/1790667561433-selfie.jpg",
-      "biFrontUrl": "kyc/usr-05d68afe/bi-frente/1790667560949-bi-frente.jpg",
-      "biBackUrl": "kyc/usr-05d68afe/bi-verso/1790667561220-bi-verso.jpg",
-      "selfieUrl": "kyc/usr-05d68afe/selfie/1790667561433-selfie.jpg",
-      "submittedAt": "2026-09-29T07:39:21.606Z",
-      "updatedAt": "2026-09-29T07:39:22.474Z",
-      "adminNotes": "Documentação validada com sucesso.",
-      "reviewedBy": "luisbongue4@gmail.com",
-      "reviewedAt": "2026-09-29T07:39:22.474Z"
-    }
-  ],
+  "kycRecords": [],
   "balances": {
     "61b14153-532c-4afb-a72c-9fea7941d179": {
       "userId": "61b14153-532c-4afb-a72c-9fea7941d179",
       "availableBalance": 0,
       "lockedBalance": 0,
       "totalBalance": 0,
-      "updatedAt": "2026-09-27T09:27:56.107Z"
+      "updatedAt": "2026-10-01T11:09:26.339Z"
     },
-    "85f029e2-1389-458c-a3e2-6bc827a60933": {
-      "userId": "85f029e2-1389-458c-a3e2-6bc827a60933",
+    "usr-b28c89a2": {
+      "userId": "usr-b28c89a2",
       "availableBalance": 0,
       "lockedBalance": 0,
       "totalBalance": 0,
-      "updatedAt": "2026-09-27T09:49:34.387Z"
-    },
-    "usr-54102b19": {
-      "userId": "usr-54102b19",
-      "availableBalance": 0,
-      "lockedBalance": 0,
-      "totalBalance": 0,
-      "updatedAt": "2026-09-27T09:49:41.861Z"
-    },
-    "test-kyc-client-user-999": {
-      "userId": "test-kyc-client-user-999",
-      "availableBalance": 0,
-      "lockedBalance": 0,
-      "totalBalance": 0,
-      "updatedAt": "2026-09-29T07:38:27.227Z"
-    },
-    "usr-d0e0b58e": {
-      "userId": "usr-d0e0b58e",
-      "availableBalance": 0,
-      "lockedBalance": 0,
-      "totalBalance": 0,
-      "updatedAt": "2026-09-29T07:39:07.820Z"
-    },
-    "usr-05d68afe": {
-      "userId": "usr-05d68afe",
-      "availableBalance": 0,
-      "lockedBalance": 0,
-      "totalBalance": 0,
-      "updatedAt": "2026-09-29T07:39:20.854Z"
-    },
-    "usr-5fa27ad0": {
-      "userId": "usr-5fa27ad0",
-      "availableBalance": 0,
-      "lockedBalance": 0,
-      "totalBalance": 0,
-      "updatedAt": "2026-09-29T07:39:31.375Z"
-    },
-    "usr-df36f212": {
-      "userId": "usr-df36f212",
-      "availableBalance": 0,
-      "lockedBalance": 0,
-      "totalBalance": 0,
-      "updatedAt": "2026-09-29T07:40:11.327Z"
+      "updatedAt": "2026-10-01T11:18:09.261Z"
     }
   },
   "ledger": [],
@@ -246,166 +88,26 @@
   },
   "notifications": [
     {
-      "userId": "usr-df36f212",
-      "title": "Atualização de Verificação KYC (Aprovado)",
-      "message": "O seu processo de verificação KYC foi avaliado: Aprovado. Observações: BI angolano e selfie conformes com a documentação",
-      "type": "success",
-      "isRead": false,
-      "id": "notif-a3e76695-7aab-4679-a10e-2c369da49447",
-      "createdAt": "2026-09-29T07:40:25.771Z"
-    },
-    {
-      "userId": "usr-df36f212",
-      "title": "Documentos KYC Submetidos",
-      "message": "Os seus documentos foram recebidos com sucesso e estão em análise pela equipa AngoPayX.",
+      "userId": "usr-b28c89a2",
+      "title": "Documentos KYC Recebidos",
+      "message": "A sua documentação foi enviada para análise pela equipa AngoPayX.",
       "type": "info",
       "isRead": false,
-      "id": "notif-9eddf448-93f8-46e5-aca7-2bd55b7ea036",
-      "createdAt": "2026-09-29T07:40:12.342Z"
+      "id": "notif-a2954964-fca2-4df2-b26f-0329467024cb",
+      "createdAt": "2026-10-01T11:18:10.090Z"
     },
     {
-      "userId": "usr-df36f212",
-      "title": "Email Verificado com Sucesso",
-      "message": "A sua conta AngoPayX está ativa para envio de KYC e transações em Kz e USDT.",
-      "type": "success",
-      "isRead": false,
-      "id": "notif-9bc5534b-625b-4fd8-bad3-3c1e2951250c",
-      "createdAt": "2026-09-29T07:40:11.354Z"
-    },
-    {
-      "userId": "usr-df36f212",
+      "userId": "usr-b28c89a2",
       "title": "Registo Concluído",
       "message": "Bem-vindo ao AngoPayX! Verifique o email oficial enviado pelo Supabase para confirmar a sua conta.",
       "type": "info",
       "isRead": false,
-      "id": "notif-77878473-3a2a-4f5a-9020-797bcd9e9db3",
-      "createdAt": "2026-09-29T07:40:11.328Z"
-    },
-    {
-      "userId": "usr-5fa27ad0",
-      "title": "Email Verificado com Sucesso",
-      "message": "A sua conta AngoPayX está ativa para envio de KYC e transações em Kz e USDT.",
-      "type": "success",
-      "isRead": false,
-      "id": "notif-31837cc3-ef33-4e8f-bce8-deab48ef9e73",
-      "createdAt": "2026-09-29T07:39:31.542Z"
-    },
-    {
-      "userId": "usr-5fa27ad0",
-      "title": "Registo Concluído",
-      "message": "Bem-vindo ao AngoPayX! Verifique o email oficial enviado pelo Supabase para confirmar a sua conta.",
-      "type": "info",
-      "isRead": false,
-      "id": "notif-cb366d55-3b39-4d7d-bf6d-691a541833d1",
-      "createdAt": "2026-09-29T07:39:31.376Z"
-    },
-    {
-      "userId": "usr-05d68afe",
-      "title": "Atualização de Verificação KYC (Aprovado)",
-      "message": "O seu processo de verificação KYC foi avaliado: Aprovado. Observações: Documentação validada com sucesso.",
-      "type": "success",
-      "isRead": false,
-      "id": "notif-35b8aaea-bc0d-4ab2-8c17-4bb9abd9abb7",
-      "createdAt": "2026-09-29T07:39:22.634Z"
-    },
-    {
-      "userId": "usr-05d68afe",
-      "title": "Documentos KYC Submetidos",
-      "message": "Os seus documentos foram recebidos com sucesso e estão em análise pela equipa AngoPayX.",
-      "type": "info",
-      "isRead": false,
-      "id": "notif-78e2b85a-dc10-4e73-9497-a57dd5898dd4",
-      "createdAt": "2026-09-29T07:39:21.948Z"
-    },
-    {
-      "userId": "usr-05d68afe",
-      "title": "Email Verificado com Sucesso",
-      "message": "A sua conta AngoPayX está ativa para envio de KYC e transações em Kz e USDT.",
-      "type": "success",
-      "isRead": false,
-      "id": "notif-6e17cf3d-ed2c-43df-8637-841228214ed0",
-      "createdAt": "2026-09-29T07:39:20.871Z"
-    },
-    {
-      "userId": "usr-05d68afe",
-      "title": "Registo Concluído",
-      "message": "Bem-vindo ao AngoPayX! Verifique o email oficial enviado pelo Supabase para confirmar a sua conta.",
-      "type": "info",
-      "isRead": false,
-      "id": "notif-18c57272-9605-4a8a-a932-3c1f148edbac",
-      "createdAt": "2026-09-29T07:39:20.854Z"
-    },
-    {
-      "userId": "usr-d0e0b58e",
-      "title": "Registo Concluído",
-      "message": "Bem-vindo ao AngoPayX! Verifique o email oficial enviado pelo Supabase para confirmar a sua conta.",
-      "type": "info",
-      "isRead": false,
-      "id": "notif-9fdcd04e-cb01-4048-8dc3-77b465badec7",
-      "createdAt": "2026-09-29T07:39:07.820Z"
-    },
-    {
-      "userId": "usr-54102b19",
-      "title": "Email Verificado com Sucesso",
-      "message": "A sua conta AngoPayX está ativa para envio de KYC e transações em Kz e USDT.",
-      "type": "success",
-      "isRead": false,
-      "id": "notif-766e871d-daa1-4885-bae2-b841fa791414",
-      "createdAt": "2026-09-27T09:49:52.882Z"
-    },
-    {
-      "userId": "usr-54102b19",
-      "title": "Confirmação de Registo - Código OTP",
-      "message": "Bem-vindo ao AngoPayX! O seu código de verificação é 372767 (válido por 15 minutos).",
-      "type": "info",
-      "isRead": false,
-      "id": "notif-022abd56-86d7-4cc5-b088-8cbc3261a621",
-      "createdAt": "2026-09-27T09:49:41.861Z"
-    },
-    {
-      "userId": "85f029e2-1389-458c-a3e2-6bc827a60933",
-      "title": "Email Verificado com Sucesso",
-      "message": "A sua conta AngoPayX está ativa para envio de KYC e transações em Kz e USDT.",
-      "type": "success",
-      "isRead": false,
-      "id": "notif-ae65d749-a84a-492e-b2f9-c7c2244dc9a7",
-      "createdAt": "2026-09-27T09:49:38.012Z"
-    },
-    {
-      "userId": "85f029e2-1389-458c-a3e2-6bc827a60933",
-      "title": "Confirmação de Registo - Código OTP",
-      "message": "Bem-vindo ao AngoPayX! O seu código de verificação é 430499 (válido por 15 minutos).",
-      "type": "info",
-      "isRead": false,
-      "id": "notif-755f331e-2697-49a1-92d7-ef41cfab5577",
-      "createdAt": "2026-09-27T09:49:34.388Z"
+      "id": "notif-fe8fd782-2205-4718-979b-c73dcae36d93",
+      "createdAt": "2026-10-01T11:18:09.262Z"
     }
   ],
   "supportTickets": [],
-  "auditLogs": [
-    {
-      "id": "audit-e4acfb8b-f61f-4c51-8220-eb56c2339c25",
-      "timestamp": "2026-09-29T07:40:25.771Z",
-      "adminId": "61b14153-532c-4afb-a72c-9fea7941d179",
-      "adminEmail": "luisbongue4@gmail.com",
-      "action": "DECISÃO_KYC_APPROVE",
-      "resource": "kyc",
-      "relatedId": "kyc-15c90ba2",
-      "result": "SUCCESS",
-      "note": "Decisão para utilizador client.angola.1790667610868@angopayx.ao: Aprovado. Observação: BI angolano e selfie conformes com a documentação"
-    },
-    {
-      "id": "audit-0bf5b5dc-75eb-4273-b7b4-45b3bdd69089",
-      "timestamp": "2026-09-29T07:39:22.634Z",
-      "adminId": "61b14153-532c-4afb-a72c-9fea7941d179",
-      "adminEmail": "luisbongue4@gmail.com",
-      "action": "DECISÃO_KYC_APPROVE",
-      "resource": "kyc",
-      "relatedId": "kyc-84ef4a4a",
-      "result": "SUCCESS",
-      "note": "Decisão para utilizador real.kyc.user.1790667560037@angopayx.ao: Aprovado. Observação: Documentação validada com sucesso."
-    }
-  ],
+  "auditLogs": [],
   "processedTxids": [],
   "reconciliationHistory": [
     {

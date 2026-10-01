@@ -12,6 +12,7 @@ import {
   RefreshCw,
   FileCheck,
   CheckCircle2,
+  Clock,
   XCircle,
   AlertTriangle,
   FileText,
@@ -40,6 +41,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { apiClient } from '../services/api.ts';
+import { supabase } from '../lib/supabase.ts';
 import { getWalletMeta } from '../components/WalletLogos.tsx';
 import {
   User,
@@ -108,6 +110,14 @@ export const AdminPanel: React.FC = () => {
 
   // Modals / Inspectors
   const [inspectKyc, setInspectKyc] = useState<KycRecord | null>(null);
+  const [realtimeKycNotification, setRealtimeKycNotification] = useState<{
+    userName: string;
+    userEmail: string;
+    time: string;
+    bi_frente_path?: string;
+    bi_verso_path?: string;
+    selfie_path?: string;
+  } | null>(null);
   const [inspectPurchase, setInspectPurchase] = useState<PurchaseOrder | null>(null);
   const [inspectSale, setInspectSale] = useState<SaleOrder | null>(null);
   const [actionNotes, setActionNotes] = useState('');
@@ -158,9 +168,35 @@ export const AdminPanel: React.FC = () => {
       setAdInquiries(res.inquiries);
     }).catch(() => {});
 
+    // Inscrição Supabase Realtime Broadcast no canal 'kyc-admin' (Req #3 e #4)
+    const kycChannel = supabase.channel('kyc-admin');
+    kycChannel
+      .on('broadcast', { event: 'new_kyc_submission' }, (event: any) => {
+        console.log('[Admin Realtime KYC Recebido]:', event?.payload);
+        showSuccess('Nova solicitação KYC recebida.');
+        const p = event?.payload;
+        if (p) {
+          setRealtimeKycNotification({
+            userName: p.user_name || 'Utilizador',
+            userEmail: p.user_email || '',
+            time: new Date().toLocaleTimeString('pt-AO'),
+            bi_frente_path: p.bi_frente_path,
+            bi_verso_path: p.bi_verso_path,
+            selfie_path: p.selfie_path,
+          });
+
+          // Atualizar lista imediatamente
+          apiClient.getAdminKycList().then((res) => {
+            if (res.kycRecords) setKycRecords(res.kycRecords);
+          }).catch(() => {});
+        }
+      })
+      .subscribe();
+
     // Auto-refresh when on KYC tab or purchases tab
+    let interval: NodeJS.Timeout | null = null;
     if (activeTab === 'kyc' || activeTab === 'purchases' || activeTab === 'dashboard') {
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         if (!inspectKyc && !inspectPurchase) {
           if (activeTab === 'kyc') {
             apiClient.getAdminKycList().then((res) => {
@@ -173,8 +209,12 @@ export const AdminPanel: React.FC = () => {
           }
         }
       }, 10000);
-      return () => clearInterval(interval);
     }
+
+    return () => {
+      supabase.removeChannel(kycChannel);
+      if (interval) clearInterval(interval);
+    };
   }, [activeTab]);
 
   const loadDashboard = async () => {
@@ -255,7 +295,7 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
-  const handleKycAction = async (action: 'approve' | 'reject' | 'request_more') => {
+  const handleKycAction = async (action: 'approve' | 'reject' | 'request_more' | 'in_review') => {
     if (!inspectKyc) return;
     try {
       await apiClient.actionKyc({
@@ -263,12 +303,37 @@ export const AdminPanel: React.FC = () => {
         action,
         notes: actionNotes.trim() || undefined,
       });
-      showSuccess(`KYC ${action === 'approve' ? 'aprovado' : action === 'reject' ? 'rejeitado' : 'marcado com pendência'} com sucesso.`);
+      showSuccess(
+        `KYC ${
+          action === 'approve'
+            ? 'aprovado'
+            : action === 'reject'
+            ? 'rejeitado'
+            : action === 'in_review'
+            ? 'colocado em análise'
+            : 'marcado com pendência'
+        } com sucesso.`
+      );
       setInspectKyc(null);
       setActionNotes('');
       loadDashboard();
     } catch (err: any) {
       showError(err.message);
+    }
+  };
+
+  const handleDeleteKycFiles = async () => {
+    if (!inspectKyc) return;
+    if (!window.confirm('Tem a certeza que deseja eliminar os documentos desta solicitação do Supabase Storage?')) {
+      return;
+    }
+    try {
+      await apiClient.deleteKycStorageFiles({ kycId: inspectKyc.id });
+      showSuccess('Documentos eliminados do Supabase Storage com sucesso (Limpeza de conformidade).');
+      setInspectKyc(null);
+      loadDashboard();
+    } catch (err: any) {
+      showError(err.message || 'Erro ao eliminar ficheiros do Storage.');
     }
   };
 
@@ -648,6 +713,47 @@ export const AdminPanel: React.FC = () => {
         >
           {msg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
           <span>{msg.text}</span>
+        </div>
+      )}
+
+      {/* Realtime KYC Alert (Req #4) */}
+      {realtimeKycNotification && (
+        <div className="p-4 rounded-xl bg-purple-950/50 border border-purple-500/50 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="p-2 rounded-lg bg-purple-500/20 text-purple-400">
+              <ShieldCheck className="w-5 h-5" />
+            </span>
+            <div>
+              <p className="font-bold text-white text-sm flex items-center gap-2">
+                <span>NOVA SOLICITAÇÃO KYC</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  Tempo Real
+                </span>
+              </p>
+              <p className="text-slate-300 text-xs mt-0.5">
+                <span className="font-semibold text-white">{realtimeKycNotification.userName}</span> ({realtimeKycNotification.userEmail}) • Enviado às {realtimeKycNotification.time}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <button
+              onClick={() => {
+                setActiveTab('kyc');
+                setRealtimeKycNotification(null);
+              }}
+              className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-xs shadow flex items-center gap-1.5"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Ver Fila KYC</span>
+            </button>
+            <button
+              onClick={() => setRealtimeKycNotification(null)}
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+              title="Fechar notificação"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -2248,6 +2354,17 @@ export const AdminPanel: React.FC = () => {
               </div>
             </div>
 
+            {/* Aviso de conformidade sem dependência de Database (Req #6) */}
+            <div className="p-3 bg-blue-950/40 border border-blue-800/60 rounded-xl text-[11px] text-blue-200 space-y-1">
+              <p className="font-bold flex items-center gap-1.5 text-blue-300">
+                <Lock className="w-3.5 h-3.5" />
+                <span>Fluxo KYC Direto: Supabase Storage + Realtime</span>
+              </p>
+              <p className="text-slate-300 leading-relaxed">
+                Os documentos foram carregados com segurança no Supabase Storage privado (<span className="font-mono text-emerald-400">kyc-documents</span>) e transmitidos em tempo real. O status da análise é gerido durante a sessão do painel, sem dependência ou persistência em tabela KYC de banco de dados.
+              </p>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
                 Observações de Compliance / Motivo de Rejeição
@@ -2264,14 +2381,21 @@ export const AdminPanel: React.FC = () => {
             <div className="flex flex-wrap gap-2 pt-2">
               <button
                 onClick={() => handleKycAction('approve')}
-                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20"
+                className="flex-1 min-w-[130px] py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Aprovar KYC</span>
               </button>
               <button
+                onClick={() => handleKycAction('in_review')}
+                className="py-2.5 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+              >
+                <Clock className="w-4 h-4" />
+                <span>Em Análise</span>
+              </button>
+              <button
                 onClick={() => handleKycAction('request_more')}
-                className="py-2.5 px-4 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                className="py-2.5 px-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"
               >
                 <AlertTriangle className="w-4 h-4" />
                 <span>Pedir Documentos</span>
@@ -2284,10 +2408,18 @@ export const AdminPanel: React.FC = () => {
                   }
                   handleKycAction('reject');
                 }}
-                className="py-2.5 px-4 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                className="py-2.5 px-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"
               >
                 <XCircle className="w-4 h-4" />
                 <span>Rejeitar</span>
+              </button>
+              <button
+                onClick={handleDeleteKycFiles}
+                className="py-2.5 px-3 bg-slate-800 hover:bg-rose-950 text-rose-400 border border-rose-800/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ml-auto"
+                title="Eliminar permanentemente os ficheiros do Supabase Storage após análise"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Limpeza Storage</span>
               </button>
             </div>
           </div>
