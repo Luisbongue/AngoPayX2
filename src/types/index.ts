@@ -19,6 +19,10 @@ export interface User {
   accountStatus: AccountStatus;
   status?: AccountStatus; // convenient alias
   kycStatus: KycStatus;
+  documentNumber?: string;
+  idNumber?: string;
+  dateOfBirth?: string;
+  nationality?: string;
   emailVerified: boolean;
   passwordHash: string;
   createdAt: string;

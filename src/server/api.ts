@@ -147,8 +147,8 @@ function ensureKycApproved(req: Request, res: Response, next: NextFunction) {
 
   if (user.kycStatus !== 'Aprovado') {
     return res.status(403).json({
-      error: 'Verificação de identidade necessária. Para realizar depósitos e retiradas, a sua conta precisa ter o KYC aprovado.',
-      code: 'KYC_REQUIRED',
+      error: 'Validação de perfil necessária. Antes de solicitar depósitos ou recargas, preencha a sua Data de Nascimento e Número do BI no seu Perfil e aguarde a validação do Administrador.',
+      code: 'PROFILE_IDENTITY_REQUIRED',
     });
   }
   next();
@@ -673,6 +673,110 @@ apiRouter.get('/rates-and-methods', (_req: Request, res: Response) => {
   });
 });
 
+// Submissão/Edição de Perfil & Dados de Identidade para Validação pelo Administrador (Sem envio de fotos)
+apiRouter.post('/profile/identity', authenticateUser, async (req: Request, res: Response) => {
+  try {
+    const user: User = (req as any).user;
+    const { fullName, documentNumber, dateOfBirth, phone, nationality } = req.body;
+
+    const trimmedName = (fullName || user.name || '').trim();
+    const trimmedDoc = (documentNumber || '').trim();
+    const trimmedDob = (dateOfBirth || '').trim();
+    const trimmedNation = (nationality || 'Angolana').trim();
+    const trimmedPhone = (phone || user.phone || '').trim();
+
+    if (!trimmedName) {
+      return res.status(400).json({ error: 'O Nome Completo é obrigatório.' });
+    }
+    if (!trimmedDoc) {
+      return res.status(400).json({ error: 'O Número do Bilhete de Identidade (BI) é obrigatório.' });
+    }
+    if (!trimmedDob) {
+      return res.status(400).json({ error: 'A Data de Nascimento é obrigatória.' });
+    }
+
+    // Atualizar dados de identidade do utilizador
+    const targetUser = db.findUserById(user.id);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Utilizador não encontrado.' });
+    }
+
+    targetUser.name = trimmedName;
+    targetUser.phone = trimmedPhone;
+    targetUser.documentNumber = trimmedDoc;
+    targetUser.idNumber = trimmedDoc;
+    targetUser.dateOfBirth = trimmedDob;
+    targetUser.nationality = trimmedNation;
+    targetUser.kycStatus = 'Pendente';
+    db.updateUser(targetUser);
+
+    // Registar/Atualizar registo KYC para visualização direta do Administrador
+    const existingKyc = db.getKycRecord(user.id);
+    const now = new Date().toISOString();
+    const kycRecord: KycRecord = {
+      id: existingKyc?.id || `id-val-${Date.now()}`,
+      userId: targetUser.id,
+      userEmail: targetUser.email,
+      userName: targetUser.name,
+      fullName: trimmedName,
+      documentType: 'BI',
+      documentNumber: trimmedDoc,
+      dateOfBirth: trimmedDob,
+      nationality: trimmedNation,
+      status: 'Pendente',
+      statusSlug: 'pending',
+      biFrontUrl: '',
+      biBackUrl: '',
+      selfieUrl: '',
+      submittedAt: existingKyc?.submittedAt || now,
+      updatedAt: now,
+      adminNotes: '',
+    };
+    db.saveKycRecord(kycRecord);
+
+    // Notificação interna
+    db.addNotification({
+      userId: targetUser.id,
+      title: 'Dados de Identidade Enviados',
+      message: 'Os seus dados de identidade (BI e Data de Nascimento) foram enviados com sucesso para validação pelo Administrador.',
+      type: 'info',
+      isRead: false,
+    });
+
+    // Notificação em tempo real para o painel Admin no canal 'kyc-admin'
+    try {
+      const realtimeChannel = supabaseAdmin.channel('kyc-admin');
+      await realtimeChannel.send({
+        type: 'broadcast',
+        event: 'new_kyc_submission',
+        payload: {
+          user_id: targetUser.id,
+          user_name: targetUser.name,
+          user_email: targetUser.email,
+          document_number: trimmedDoc,
+          date_of_birth: trimmedDob,
+          nationality: trimmedNation,
+          time: new Date().toLocaleTimeString('pt-AO'),
+          submitted_at: now,
+          has_photos: false,
+        },
+      });
+    } catch {
+      // ignore broadcast error
+    }
+
+    return res.json({
+      success: true,
+      message: 'Dados de identidade enviados com sucesso! Aguarde a validação pelo Administrador para realizar depósitos e recargas.',
+      user: targetUser,
+      kycRecord,
+    });
+  } catch (err: any) {
+    console.error('[Profile Identity Submit Error]:', err);
+    return res.status(500).json({ error: err.message || 'Erro ao guardar dados do perfil.' });
+  }
+});
+
 // ==========================================
 // 3. KYC (COFRE PRIVADO DIRETO DO ANGOPAYX - SEM SUPABASE)
 // ==========================================
@@ -924,26 +1028,19 @@ apiRouter.post(
       if (!finalBackPath && existingRecord?.biBackPath) finalBackPath = existingRecord.biBackPath;
       if (!finalSelfiePath && existingRecord?.selfiePath) finalSelfiePath = existingRecord.selfiePath;
 
-      if (!finalFrontPath) {
-        return res.status(400).json({ error: 'O ficheiro de BI (Frente) é obrigatório.' });
-      }
-      if (!finalBackPath) {
-        return res.status(400).json({ error: 'O ficheiro de BI (Verso) é obrigatório.' });
-      }
-      if (!finalSelfiePath) {
-        return res.status(400).json({ error: 'A fotografia tipo Selfie com o BI é obrigatória.' });
-      }
-
       const fullName = (req.body.fullName || req.body.name || user.name || '').trim();
-      const documentNumber = (req.body.documentNumber || req.body.idNumber || '').trim();
-      const nationality = (req.body.nationality || 'Angolana').trim();
-      const dateOfBirth = (req.body.dateOfBirth || '').trim();
+      const documentNumber = (req.body.documentNumber || req.body.idNumber || user.documentNumber || '').trim();
+      const nationality = (req.body.nationality || user.nationality || 'Angolana').trim();
+      const dateOfBirth = (req.body.dateOfBirth || user.dateOfBirth || '').trim();
 
       if (!fullName) {
         return res.status(400).json({ error: 'Nome Completo conforme o Bilhete de Identidade é obrigatório.' });
       }
       if (!documentNumber) {
         return res.status(400).json({ error: 'Número do Bilhete de Identidade (BI) é obrigatório.' });
+      }
+      if (!dateOfBirth) {
+        return res.status(400).json({ error: 'Data de Nascimento é obrigatória.' });
       }
 
       const now = new Date().toISOString();
@@ -973,9 +1070,14 @@ apiRouter.post(
 
       db.saveKycRecord(kycRecord);
 
-      // Atualizar estado KYC do utilizador para 'Pendente'
+      // Atualizar estado KYC e dados de identidade do utilizador para 'Pendente'
       const targetUser = db.findUserById(user.id);
       if (targetUser) {
+        targetUser.name = fullName;
+        targetUser.documentNumber = documentNumber;
+        targetUser.idNumber = documentNumber;
+        targetUser.dateOfBirth = dateOfBirth;
+        targetUser.nationality = nationality;
         targetUser.kycStatus = 'Pendente';
         db.updateUser(targetUser);
       }

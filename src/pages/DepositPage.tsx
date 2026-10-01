@@ -83,7 +83,7 @@ export const DepositPage: React.FC<DepositPageProps> = ({ onNavigate }) => {
     setVerifySuccess(null);
 
     if (!isKycApproved) {
-      setVerifyError('Verificação de identidade necessária. Para realizar depósitos e retiradas, a sua conta precisa ter o KYC aprovado.');
+      setVerifyError('Antes de solicitar depósitos ou recargas, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador (sem fotos).');
       return;
     }
 

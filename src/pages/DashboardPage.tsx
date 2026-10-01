@@ -89,14 +89,23 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 <h1 className="text-base sm:text-lg font-bold text-white">Olá, {user.name}</h1>
                 {user.kycStatus === 'Aprovado' ? (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                    <CheckCircle2 className="w-3 h-3" /> KYC Verificado
+                    <CheckCircle2 className="w-3 h-3" /> Identidade Aprovada
+                  </span>
+                ) : user.kycStatus === 'Pendente' || user.kycStatus === 'Em análise' ? (
+                  <span
+                    onClick={() => onNavigate('profile')}
+                    className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition"
+                    title="Dados de identidade em análise pelo Administrador"
+                  >
+                    <AlertCircle className="w-3 h-3" /> Identidade em Análise no Adm
                   </span>
                 ) : (
                   <span
-                    onClick={() => onNavigate('kyc')}
-                    className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 transition"
+                    onClick={() => onNavigate('profile')}
+                    className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 hover:bg-blue-500/30 transition"
+                    title="Preencha o seu BI e Data de Nascimento no Perfil antes de solicitar depósitos ou recargas"
                   >
-                    <AlertCircle className="w-3 h-3" /> KYC: {user.kycStatus}
+                    <AlertCircle className="w-3 h-3" /> Preencher BI no Perfil
                   </span>
                 )}
               </div>

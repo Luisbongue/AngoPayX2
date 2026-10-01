@@ -53,7 +53,6 @@ function AppContent() {
       case 'history':
         return <HistoryPage />;
       case 'kyc':
-        return <KycPage onNavigate={(tab) => setCurrentTab(tab)} />;
       case 'profile':
         return <ProfilePage onNavigate={(tab) => setCurrentTab(tab)} />;
       case 'notifications':

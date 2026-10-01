@@ -84,7 +84,7 @@ export const SellPage: React.FC<SellPageProps> = ({ onNavigate }) => {
     setSuccess(null);
 
     if (!isKycApproved) {
-      setError('Verificação de identidade necessária. Para realizar depósitos e retiradas, a sua conta precisa ter o KYC aprovado.');
+      setError('Antes de solicitar vendas ou retiradas, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador (sem fotos).');
       return;
     }
 
@@ -312,7 +312,7 @@ export const SellPage: React.FC<SellPageProps> = ({ onNavigate }) => {
                 {loading
                   ? 'A processar ordem...'
                   : !isKycApproved
-                  ? 'KYC Obrigatório para Retiradas'
+                  ? 'Preencha Perfil para Vender'
                   : 'Confirmar Venda e Receber Kwanzas'}
                 <ArrowRight className="w-4 h-4" />
               </button>

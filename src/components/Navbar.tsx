@@ -70,7 +70,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onOpe
     { id: 'withdraw', label: 'Sacar USDT', icon: Upload },
     { id: 'wallets', label: 'Carteiras', icon: Wallet },
     { id: 'history', label: 'Histórico', icon: Clock },
-    { id: 'kyc', label: 'KYC', icon: ShieldCheck },
     { id: 'support', label: 'Suporte', icon: HelpCircle },
   ];
 

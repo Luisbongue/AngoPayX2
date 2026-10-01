@@ -765,7 +765,7 @@ export const AdminPanel: React.FC = () => {
           { id: 'purchases', label: 'Compras (USDT)', icon: PlusCircle, badge: metrics?.pendingPurchasesCount },
           { id: 'sales', label: 'Vendas (Kz)', icon: MinusCircle, badge: metrics?.pendingSalesCount },
           { id: 'withdrawals', label: 'Saques (Binance / Bybit / RedotPay / TRON)', icon: Upload, badge: metrics?.pendingWithdrawalsCount },
-          { id: 'kyc', label: 'Validação KYC', icon: ShieldCheck, badge: metrics?.pendingKycCount },
+          { id: 'kyc', label: 'Validação de Identidade (BI)', icon: ShieldCheck, badge: metrics?.pendingKycCount },
           { id: 'clients', label: 'Clientes', icon: Users },
           { id: 'ledger', label: 'Livro-Razão (Ledger)', icon: Layers },
           { id: 'exchange', label: 'Câmbio (Kz)', icon: TrendingUp },
@@ -1183,22 +1183,39 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* TAB CONTENT: KYC */}
+      {/* TAB CONTENT: KYC / VALIDAÇÃO DE IDENTIDADE */}
       {activeTab === 'kyc' && (
         <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-              Fila de Verificação de Identidade KYC ({kycRecords.length})
-            </h2>
-            <span className="text-xs text-slate-400">Inspeção de Bilhetes de Identidade e Selfies</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>Fila de Validação de Identidade ({kycRecords.length})</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Validação de Número do Bilhete de Identidade (BI) e Data de Nascimento enviados pelo Perfil dos clientes (sem fotos).
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                apiClient.getAdminKycList().then((res) => {
+                  if (res.kycRecords) setKycRecords(res.kycRecords);
+                }).catch(() => {});
+              }}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 self-start sm:self-auto transition"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Atualizar Fila</span>
+            </button>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-800 text-slate-400 font-semibold">
-                  <th className="pb-3 pl-2">Nome Completo</th>
-                  <th className="pb-3">Nº do BI</th>
+                  <th className="pb-3 pl-2">Cliente / E-mail</th>
+                  <th className="pb-3">Nº do Bilhete de Identidade (BI)</th>
+                  <th className="pb-3">Data de Nascimento</th>
                   <th className="pb-3">Nacionalidade</th>
                   <th className="pb-3">Data Envio</th>
                   <th className="pb-3">Estado</th>
@@ -1206,36 +1223,52 @@ export const AdminPanel: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {kycRecords.map((k) => (
-                  <tr key={k.id} className="hover:bg-slate-800/40 transition">
-                    <td className="py-3 pl-2 font-bold text-white">{k.fullName}</td>
-                    <td className="py-3 font-mono text-slate-300">{k.documentNumber}</td>
-                    <td className="py-3 text-slate-400">{k.nationality}</td>
-                    <td className="py-3 text-slate-400">{new Date(k.submittedAt).toLocaleDateString('pt-AO')}</td>
-                    <td className="py-3">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                          k.status === 'Aprovado'
-                            ? 'bg-emerald-500/20 text-emerald-400'
-                            : k.status === 'Rejeitado'
-                            ? 'bg-rose-500/20 text-rose-400'
-                            : 'bg-amber-500/20 text-amber-300'
-                        }`}
-                      >
-                        {k.status}
-                      </span>
-                    </td>
-                    <td className="py-3 pr-2 text-right">
-                      <button
-                        onClick={() => setInspectKyc(k)}
-                        className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-bold shadow flex items-center gap-1 ml-auto"
-                      >
-                        <Eye className="w-3 h-3" />
-                        <span>Inspecionar</span>
-                      </button>
+                {kycRecords.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-slate-500">
+                      Nenhuma solicitação de validação de identidade na fila.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  kycRecords.map((k) => (
+                    <tr key={k.id} className="hover:bg-slate-800/40 transition">
+                      <td className="py-3 pl-2">
+                        <span className="font-bold text-white block">{k.fullName || k.userName}</span>
+                        <span className="text-[11px] text-slate-400">{k.userEmail}</span>
+                      </td>
+                      <td className="py-3 font-mono font-bold text-emerald-400">{k.documentNumber}</td>
+                      <td className="py-3 font-medium text-slate-200">
+                        {k.dateOfBirth || (
+                          <span className="text-slate-500 italic">Não informada</span>
+                        )}
+                      </td>
+                      <td className="py-3 text-slate-400">{k.nationality || 'Angolana'}</td>
+                      <td className="py-3 text-slate-400">{new Date(k.submittedAt).toLocaleDateString('pt-AO')}</td>
+                      <td className="py-3">
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                            k.status === 'Aprovado'
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : k.status === 'Rejeitado'
+                              ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          }`}
+                        >
+                          {k.status}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-2 text-right">
+                        <button
+                          onClick={() => setInspectKyc(k)}
+                          className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-bold shadow flex items-center gap-1 ml-auto transition"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>Validar</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

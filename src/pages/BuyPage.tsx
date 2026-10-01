@@ -172,7 +172,7 @@ export const BuyPage: React.FC<BuyPageProps> = ({ onNavigate }) => {
     const isKycApproved = Boolean(isSoleAdmin || user?.kycStatus === 'Aprovado');
 
     if (!isKycApproved) {
-      setError('Para realizar um depósito, a sua conta precisa ter o KYC aprovado.');
+      setError('Antes de solicitar recargas ou depósitos, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador.');
       return;
     }
 
@@ -256,7 +256,7 @@ export const BuyPage: React.FC<BuyPageProps> = ({ onNavigate }) => {
     const isSoleAdmin = user?.email?.toLowerCase() === 'luisbongue4@gmail.com';
     const isKycApproved = Boolean(isSoleAdmin || user?.kycStatus === 'Aprovado');
     if (!isKycApproved) {
-      setError('Para realizar um depósito, a sua conta precisa ter o KYC aprovado.');
+      setError('Antes de solicitar recargas ou depósitos, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador.');
       return;
     }
 
@@ -660,7 +660,7 @@ export const BuyPage: React.FC<BuyPageProps> = ({ onNavigate }) => {
                   }`}
                 >
                   {!isKycApproved
-                    ? 'KYC Aprovado Obrigatório para Depósito'
+                    ? 'Preencha o Perfil antes de Comprar / Recarregar'
                     : loading
                     ? 'A criar ordem...'
                     : `Prosseguir para Carga na ${currentMeta.name}`}

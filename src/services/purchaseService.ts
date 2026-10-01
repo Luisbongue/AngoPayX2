@@ -64,7 +64,7 @@ export const purchaseService = {
     // Strict KYC verification check
     const isSoleAdmin = user.email?.toLowerCase() === 'luisbongue4@gmail.com';
     if (!isSoleAdmin && user.kycStatus !== 'Aprovado') {
-      throw new Error('Verificação de identidade necessária. Para realizar depósitos e retiradas, a sua conta precisa ter o KYC aprovado.');
+      throw new Error('Validação de perfil necessária. Antes de solicitar depósitos ou recargas, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador.');
     }
 
     const subtotalKz = usdtAmount * buyRateKz;
@@ -188,7 +188,7 @@ export const purchaseService = {
 
     const isSoleAdmin = user.email?.toLowerCase() === 'luisbongue4@gmail.com';
     if (!isSoleAdmin && user.kycStatus !== 'Aprovado') {
-      throw new Error('Verificação de identidade necessária. Para realizar depósitos e retiradas, a sua conta precisa ter o KYC aprovado.');
+      throw new Error('Validação de perfil necessária. Antes de solicitar depósitos ou recargas, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador.');
     }
 
     let uploadedReceiptUrl = receiptDataUrl || '';

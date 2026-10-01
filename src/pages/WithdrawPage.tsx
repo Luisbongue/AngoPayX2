@@ -146,7 +146,7 @@ export const WithdrawPage: React.FC<WithdrawPageProps> = ({ onNavigate }) => {
     setSuccess(null);
 
     if (!isKycApproved) {
-      setError('Verificação de identidade necessária. Para realizar depósitos e retiradas, a sua conta precisa ter o KYC aprovado.');
+      setError('Antes de solicitar saques ou retiradas, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador (sem fotos).');
       return;
     }
 
@@ -476,7 +476,7 @@ export const WithdrawPage: React.FC<WithdrawPageProps> = ({ onNavigate }) => {
                 {loading
                   ? 'A processar saque...'
                   : !isKycApproved
-                  ? 'KYC Obrigatório para Saques'
+                  ? 'Preencha Perfil para Sacar'
                   : `Confirmar e Sacar para ${currentMeta.name}`}
                 <ArrowRight className="w-4 h-4" />
               </button>

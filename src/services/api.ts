@@ -136,8 +136,20 @@ export const apiClient = {
     paymentMethods: PaymentMethodConfig[];
   }>('/rates-and-methods'),
 
-  // KYC
-  // KYC (Submissão e envio de documentos com conformidade e cofre de segurança)
+  // Profile Identity (Validação de Dados de Identidade sem envio de fotos)
+  updateProfileIdentity: (payload: {
+    fullName: string;
+    documentNumber: string;
+    dateOfBirth: string;
+    phone?: string;
+    nationality?: string;
+  }) =>
+    request<{ success: boolean; message: string; user: User; kycRecord: KycRecord }>('/profile/identity', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  // KYC (Submissão e envio de dados com conformidade)
   uploadKycDocument: (payload: {
     documentType: 'bi-frente' | 'bi-verso' | 'selfie';
     fileName: string;
