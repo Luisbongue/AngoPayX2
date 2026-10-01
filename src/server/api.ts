@@ -33,17 +33,13 @@ const kycUpload = multer({
   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB max per document
 });
 
-// Helper: Extract current user from Authorization header (Supabase JWT or secure session token)
+// Helper: Extract current user from Authorization header (Supabase JWT or secure session token) or query param
 async function authenticateUser(req: Request, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ error: 'Sessão não autenticada. Por favor, faça login.' });
-    }
-
-    const token = authHeader.replace('Bearer ', '').trim();
+    const token = (req.query.token as string) || (authHeader ? authHeader.replace('Bearer ', '').trim() : '');
     if (!token) {
-      return res.status(401).json({ error: 'Token de autenticação inválido.' });
+      return res.status(401).json({ error: 'Sessão não autenticada. Por favor, faça login.' });
     }
 
     let user: User | undefined;
@@ -967,9 +963,9 @@ apiRouter.post(
         biFrontPath: finalFrontPath,
         biBackPath: finalBackPath,
         selfiePath: finalSelfiePath,
-        biFrontUrl: finalFrontPath,
-        biBackUrl: finalBackPath,
-        selfieUrl: finalSelfiePath,
+        biFrontUrl: `/api/kyc/document/${user.id}/bi-frente`,
+        biBackUrl: `/api/kyc/document/${user.id}/bi-verso`,
+        selfieUrl: `/api/kyc/document/${user.id}/selfie`,
         submittedAt: existingRecord?.submittedAt || now,
         updatedAt: now,
         adminNotes: '',

@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { apiClient } from '../services/api.ts';
-import { supabase } from '../lib/supabase.ts';
 import { KycRecord } from '../types/index.ts';
 
 interface KycPageProps {
@@ -141,33 +140,7 @@ export const KycPage: React.FC<KycPageProps> = ({ onNavigate }) => {
     });
   };
 
-  // Upload single document directly to Supabase Storage via backend
-  const uploadDocumentReal = async (
-    file: File,
-    documentType: 'bi-frente' | 'bi-verso' | 'selfie',
-    label: string
-  ): Promise<string> => {
-    try {
-      const base64Data = await fileToBase64(file);
-      const res = await apiClient.uploadKycDocument({
-        documentType,
-        fileName: file.name,
-        contentType: file.type || 'image/jpeg',
-        base64Data,
-      });
-
-      if (!res.success || !res.path) {
-        throw new Error(`Falha no upload do ficheiro de ${label}.`);
-      }
-
-      return res.path;
-    } catch (err: unknown) {
-      console.error(`[Upload Real ${documentType} Erro]:`, err);
-      throw new Error(`Erro ao enviar ${label} para o Supabase Storage. Verifique o ficheiro e tente novamente.`);
-    }
-  };
-
-  // Submit complete KYC verification
+  // Submissão direta de verificação KYC para a equipa e cofre seguro do AngoPayX
   const handleSubmitKyc = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -178,7 +151,7 @@ export const KycPage: React.FC<KycPageProps> = ({ onNavigate }) => {
       return;
     }
 
-    // 1. Validate Text Fields
+    // 1. Validar campos de identificação
     if (!fullName.trim()) {
       setError('Por favor, informe o seu Nome Completo conforme consta no Bilhete de Identidade.');
       return;
@@ -189,7 +162,7 @@ export const KycPage: React.FC<KycPageProps> = ({ onNavigate }) => {
       return;
     }
 
-    // 2. Validate all 3 files are present
+    // 2. Validar que os 3 documentos estão selecionados
     const hasFront = Boolean(frontFile || frontPreview || kyc?.biFrontUrl);
     const hasBack = Boolean(backFile || backPreview || kyc?.biBackUrl);
     const hasSelfie = Boolean(selfieFile || selfiePreview || kyc?.selfieUrl);
@@ -200,79 +173,52 @@ export const KycPage: React.FC<KycPageProps> = ({ onNavigate }) => {
     }
 
     setLoading(true);
+    setUploadStep('A preparar e encriptar documentação...');
 
     try {
-      let finalFrontPath = kyc?.biFrontPath || kyc?.biFrontUrl || '';
-      let finalBackPath = kyc?.biBackPath || kyc?.biBackUrl || '';
-      let finalSelfiePath = kyc?.selfiePath || kyc?.selfieUrl || '';
+      const formData = new FormData();
+      formData.append('fullName', fullName.trim());
+      formData.append('documentNumber', idNumber.trim());
+      formData.append('nationality', nationality.trim() || 'Angolana');
+      formData.append('dateOfBirth', dateOfBirth || '');
 
-      // Upload 1: BI Frente
+      // Anexar os ficheiros diretamente via multipart/form-data
       if (frontFile) {
-        setUploadStep('A enviar BI (Frente) para o Supabase Storage... (1/3)');
-        finalFrontPath = await uploadDocumentReal(frontFile, 'bi-frente', 'BI (Frente)');
+        formData.append('bi_frente', frontFile);
+      } else if (frontPreview && frontPreview.startsWith('data:')) {
+        formData.append('bi_frente_base64', frontPreview);
       }
 
-      // Upload 2: BI Verso
       if (backFile) {
-        setUploadStep('A enviar BI (Verso) para o Supabase Storage... (2/3)');
-        finalBackPath = await uploadDocumentReal(backFile, 'bi-verso', 'BI (Verso)');
+        formData.append('bi_verso', backFile);
+      } else if (backPreview && backPreview.startsWith('data:')) {
+        formData.append('bi_verso_base64', backPreview);
       }
 
-      // Upload 3: Selfie com BI
       if (selfieFile) {
-        setUploadStep('A enviar Selfie com BI para o Supabase Storage... (3/3)');
-        finalSelfiePath = await uploadDocumentReal(selfieFile, 'selfie', 'Selfie com BI');
+        formData.append('selfie', selfieFile);
+      } else if (selfiePreview && selfiePreview.startsWith('data:')) {
+        formData.append('selfie_base64', selfiePreview);
       }
 
-      // Step 4: Transmissão em tempo real via Supabase Realtime Broadcast (canal: kyc-admin, evento: new_kyc_submission)
-      setUploadStep('A notificar administração em tempo real...');
-      try {
-        const channel = supabase.channel('kyc-admin');
-        await channel.subscribe();
-        await channel.send({
-          type: 'broadcast',
-          event: 'new_kyc_submission',
-          payload: {
-            user_id: user.id,
-            user_name: user.name,
-            user_email: user.email,
-            submitted_at: new Date().toISOString(),
-            bi_frente_path: finalFrontPath,
-            bi_verso_path: finalBackPath,
-            selfie_path: finalSelfiePath,
-          },
-        });
-      } catch (broadcastErr) {
-        console.warn('[Realtime Broadcast Warning]:', broadcastErr);
+      setUploadStep('A entregar documentos ao Administrador...');
+      const response = await apiClient.submitKyc(formData);
+
+      if (!response.success && !response.kycRecord) {
+        throw new Error(response.message || 'Falha ao processar os documentos.');
       }
 
-      // Step 5: Enviar metadados e caminhos para a API do AngoPayX (sem gravar em tabela Database)
-      const response = await apiClient.submitKyc({
-        fullName: fullName.trim(),
-        documentType: 'BI',
-        documentNumber: idNumber.trim(),
-        nationality: nationality.trim() || 'Angolana',
-        dateOfBirth: dateOfBirth || '',
-        biFrontPath: finalFrontPath,
-        biBackPath: finalBackPath,
-        selfiePath: finalSelfiePath,
-        biFrentePath: finalFrontPath,
-        biVersoPath: finalBackPath,
-      });
-
-      // Clear files since they are safely uploaded
+      // Limpar ficheiros locais
       setFrontFile(null);
       setBackFile(null);
       setSelfieFile(null);
 
-      setSuccess(
-        '✓ Documentos enviados com sucesso.\nA sua documentação foi enviada para análise.'
-      );
+      setSuccess('✓ Documentos enviados com sucesso.\nA sua documentação foi enviada para análise.');
 
-      // Refresh global user state to show updated KYC badge
+      // Atualizar estado global da conta
       await refreshUser();
     } catch (err: unknown) {
-      console.error('[KYC Submit Erro Supabase/Storage/API]:', err);
+      console.error('[KYC Submit Erro]:', err);
       const friendlyMessage = getFriendlyErrorMessage(err);
       setError(friendlyMessage);
     } finally {
@@ -377,9 +323,9 @@ export const KycPage: React.FC<KycPageProps> = ({ onNavigate }) => {
               <span className="text-slate-300">{kyc?.nationality || 'Angolana'}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Verificação no Storage:</span>
+              <span className="text-slate-400">Verificação de Identidade:</span>
               <span className="text-emerald-400 flex items-center gap-1 font-semibold">
-                <FileCheck2 className="w-3.5 h-3.5" /> Supabase Storage (Privado)
+                <FileCheck2 className="w-3.5 h-3.5" /> Conformidade Aprovada
               </span>
             </div>
           </div>
@@ -412,7 +358,7 @@ export const KycPage: React.FC<KycPageProps> = ({ onNavigate }) => {
           <div>
             <h2 className="text-lg font-bold text-white">Documentação em Análise pela AngoPayX</h2>
             <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-              Os seus documentos estão guardados com segurança no Supabase Storage e aguardam validação pela equipa de compliance.
+              Os seus documentos foram entregues com segurança e aguardam validação pela equipa de compliance.
             </p>
           </div>
 
@@ -432,9 +378,9 @@ export const KycPage: React.FC<KycPageProps> = ({ onNavigate }) => {
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Armazenamento:</span>
+              <span className="text-slate-400">Processamento:</span>
               <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" /> Supabase Storage (kyc-documents)
+                <ShieldCheck className="w-3.5 h-3.5" /> Entregue ao Administrador
               </span>
             </div>
           </div>

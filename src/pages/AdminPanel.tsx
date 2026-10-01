@@ -40,7 +40,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
-import { apiClient } from '../services/api.ts';
+import { apiClient, getStoredToken } from '../services/api.ts';
 import { supabase } from '../lib/supabase.ts';
 import { getWalletMeta } from '../components/WalletLogos.tsx';
 import {
@@ -324,16 +324,16 @@ export const AdminPanel: React.FC = () => {
 
   const handleDeleteKycFiles = async () => {
     if (!inspectKyc) return;
-    if (!window.confirm('Tem a certeza que deseja eliminar os documentos desta solicitação do Supabase Storage?')) {
+    if (!window.confirm('Tem a certeza que deseja eliminar permanentemente os ficheiros desta solicitação do cofre de conformidade?')) {
       return;
     }
     try {
       await apiClient.deleteKycStorageFiles({ kycId: inspectKyc.id });
-      showSuccess('Documentos eliminados do Supabase Storage com sucesso (Limpeza de conformidade).');
+      showSuccess('Documentos eliminados do cofre com sucesso (Limpeza de conformidade).');
       setInspectKyc(null);
       loadDashboard();
     } catch (err: any) {
-      showError(err.message || 'Erro ao eliminar ficheiros do Storage.');
+      showError(err.message || 'Erro ao eliminar ficheiros do cofre.');
     }
   };
 
@@ -2277,91 +2277,133 @@ export const AdminPanel: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="p-2.5 bg-slate-800/40 rounded-xl border border-slate-700/60 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-bold text-slate-300">BI Frente</span>
-                    <a
-                      href={inspectKyc.biFrontSignedUrl || inspectKyc.biFrontUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] text-emerald-400 hover:underline flex items-center gap-1 font-semibold"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      <span>Ver Original</span>
-                    </a>
-                  </div>
-                  <img
-                    src={inspectKyc.biFrontSignedUrl || inspectKyc.biFrontUrl}
-                    alt="BI Frente"
-                    className="w-full h-36 object-contain bg-slate-950 rounded-lg border border-slate-700"
-                  />
-                </div>
-                <span className="text-[9px] text-slate-400 mt-1 block truncate font-mono">
-                  {inspectKyc.biFrontPath || 'storage/kyc/frente'}
-                </span>
-              </div>
+            {(() => {
+              const adminToken = getStoredToken() || '';
+              const resolveDocUrl = (url?: string) => {
+                if (!url) return '';
+                if (url.startsWith('/api/kyc/document/')) {
+                  const sep = url.includes('?') ? '&' : '?';
+                  return `${url}${sep}token=${encodeURIComponent(adminToken)}`;
+                }
+                return url;
+              };
 
-              <div className="p-2.5 bg-slate-800/40 rounded-xl border border-slate-700/60 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-bold text-slate-300">BI Verso</span>
-                    <a
-                      href={inspectKyc.biBackSignedUrl || inspectKyc.biBackUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] text-emerald-400 hover:underline flex items-center gap-1 font-semibold"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      <span>Ver Original</span>
-                    </a>
-                  </div>
-                  <img
-                    src={inspectKyc.biBackSignedUrl || inspectKyc.biBackUrl}
-                    alt="BI Verso"
-                    className="w-full h-36 object-contain bg-slate-950 rounded-lg border border-slate-700"
-                  />
-                </div>
-                <span className="text-[9px] text-slate-400 mt-1 block truncate font-mono">
-                  {inspectKyc.biBackPath || 'storage/kyc/verso'}
-                </span>
-              </div>
+              const frontUrl = resolveDocUrl(inspectKyc.biFrontSignedUrl || inspectKyc.biFrontUrl);
+              const backUrl = resolveDocUrl(inspectKyc.biBackSignedUrl || inspectKyc.biBackUrl);
+              const selfieUrl = resolveDocUrl(inspectKyc.selfieSignedUrl || inspectKyc.selfieUrl);
 
-              <div className="p-2.5 bg-slate-800/40 rounded-xl border border-slate-700/60 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-bold text-slate-300">Selfie com BI</span>
-                    <a
-                      href={inspectKyc.selfieSignedUrl || inspectKyc.selfieUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] text-emerald-400 hover:underline flex items-center gap-1 font-semibold"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      <span>Ver Original</span>
-                    </a>
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-2.5 bg-slate-800/40 rounded-xl border border-slate-700/60 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] font-bold text-slate-300">BI Frente</span>
+                        {frontUrl && (
+                          <a
+                            href={frontUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-emerald-400 hover:underline flex items-center gap-1 font-semibold"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Ver Original</span>
+                          </a>
+                        )}
+                      </div>
+                      {frontUrl ? (
+                        <img
+                          src={frontUrl}
+                          alt="BI Frente"
+                          className="w-full h-36 object-contain bg-slate-950 rounded-lg border border-slate-700"
+                        />
+                      ) : (
+                        <div className="w-full h-36 bg-slate-950 rounded-lg border border-slate-700 flex items-center justify-center text-xs text-slate-500">
+                          Documento não disponível
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[9px] text-slate-400 mt-1 block truncate font-mono">
+                      {inspectKyc.biFrontPath || 'cofre/kyc/frente'}
+                    </span>
                   </div>
-                  <img
-                    src={inspectKyc.selfieSignedUrl || inspectKyc.selfieUrl}
-                    alt="Selfie"
-                    className="w-full h-36 object-contain bg-slate-950 rounded-lg border border-slate-700"
-                  />
-                </div>
-                <span className="text-[9px] text-slate-400 mt-1 block truncate font-mono">
-                  {inspectKyc.selfiePath || 'storage/kyc/selfie'}
-                </span>
-              </div>
-            </div>
 
-            {/* Aviso de conformidade sem dependência de Database (Req #6) */}
+                  <div className="p-2.5 bg-slate-800/40 rounded-xl border border-slate-700/60 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] font-bold text-slate-300">BI Verso</span>
+                        {backUrl && (
+                          <a
+                            href={backUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-emerald-400 hover:underline flex items-center gap-1 font-semibold"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Ver Original</span>
+                          </a>
+                        )}
+                      </div>
+                      {backUrl ? (
+                        <img
+                          src={backUrl}
+                          alt="BI Verso"
+                          className="w-full h-36 object-contain bg-slate-950 rounded-lg border border-slate-700"
+                        />
+                      ) : (
+                        <div className="w-full h-36 bg-slate-950 rounded-lg border border-slate-700 flex items-center justify-center text-xs text-slate-500">
+                          Documento não disponível
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[9px] text-slate-400 mt-1 block truncate font-mono">
+                      {inspectKyc.biBackPath || 'cofre/kyc/verso'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 bg-slate-800/40 rounded-xl border border-slate-700/60 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] font-bold text-slate-300">Selfie com BI</span>
+                        {selfieUrl && (
+                          <a
+                            href={selfieUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-emerald-400 hover:underline flex items-center gap-1 font-semibold"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Ver Original</span>
+                          </a>
+                        )}
+                      </div>
+                      {selfieUrl ? (
+                        <img
+                          src={selfieUrl}
+                          alt="Selfie"
+                          className="w-full h-36 object-contain bg-slate-950 rounded-lg border border-slate-700"
+                        />
+                      ) : (
+                        <div className="w-full h-36 bg-slate-950 rounded-lg border border-slate-700 flex items-center justify-center text-xs text-slate-500">
+                          Documento não disponível
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[9px] text-slate-400 mt-1 block truncate font-mono">
+                      {inspectKyc.selfiePath || 'cofre/kyc/selfie'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Aviso de conformidade sem retenção permanente */}
             <div className="p-3 bg-blue-950/40 border border-blue-800/60 rounded-xl text-[11px] text-blue-200 space-y-1">
               <p className="font-bold flex items-center gap-1.5 text-blue-300">
                 <Lock className="w-3.5 h-3.5" />
-                <span>Fluxo KYC Direto: Supabase Storage + Realtime</span>
+                <span>Cofre Direto AngoPayX (Privacidade e Análise sob Demanda)</span>
               </p>
               <p className="text-slate-300 leading-relaxed">
-                Os documentos foram carregados com segurança no Supabase Storage privado (<span className="font-mono text-emerald-400">kyc-documents</span>) e transmitidos em tempo real. O status da análise é gerido durante a sessão do painel, sem dependência ou persistência em tabela KYC de banco de dados.
+                Os documentos são entregues diretamente pelo backend sem persistência em tabelas externas. Conforme a política de privacidade, pode visualizar os documentos para validação e, após concluir a análise, clicar em <strong>"Limpeza Cofre"</strong> para eliminar permanentemente os ficheiros.
               </p>
             </div>
 
@@ -2416,10 +2458,10 @@ export const AdminPanel: React.FC = () => {
               <button
                 onClick={handleDeleteKycFiles}
                 className="py-2.5 px-3 bg-slate-800 hover:bg-rose-950 text-rose-400 border border-rose-800/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ml-auto"
-                title="Eliminar permanentemente os ficheiros do Supabase Storage após análise"
+                title="Eliminar permanentemente os ficheiros do cofre após análise"
               >
                 <Trash2 className="w-4 h-4" />
-                <span>Limpeza Storage</span>
+                <span>Limpeza Cofre</span>
               </button>
             </div>
           </div>
