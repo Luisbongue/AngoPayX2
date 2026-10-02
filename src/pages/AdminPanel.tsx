@@ -2324,6 +2324,54 @@ export const AdminPanel: React.FC = () => {
               const frontUrl = resolveDocUrl(inspectKyc.biFrontSignedUrl || inspectKyc.biFrontUrl);
               const backUrl = resolveDocUrl(inspectKyc.biBackSignedUrl || inspectKyc.biBackUrl);
               const selfieUrl = resolveDocUrl(inspectKyc.selfieSignedUrl || inspectKyc.selfieUrl);
+              const hasPhotos = Boolean(frontUrl || backUrl || selfieUrl);
+
+              if (!hasPhotos) {
+                return (
+                  <div className="p-5 bg-gradient-to-r from-emerald-950/40 via-slate-850 to-slate-900 border border-emerald-500/30 rounded-2xl space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0 text-emerald-400">
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white">
+                          Validação de Identidade Direta (Sem Fotos)
+                        </h4>
+                        <p className="text-xs text-slate-300 mt-0.5">
+                          O cliente preencheu os dados de identificação no seu Perfil para validação administrativa antes de solicitar depósitos ou recargas.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div className="p-4 bg-slate-900 rounded-xl border border-slate-700/80">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
+                          Número do Bilhete de Identidade (BI)
+                        </span>
+                        <p className="text-base font-mono font-black text-emerald-400 mt-1 select-all">
+                          {inspectKyc.documentNumber}
+                        </p>
+                        <span className="text-[10px] text-slate-500 mt-1 block">Registo oficial angolano</span>
+                      </div>
+
+                      <div className="p-4 bg-slate-900 rounded-xl border border-slate-700/80">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
+                          Data de Nascimento
+                        </span>
+                        <p className="text-base font-bold text-white mt-1">
+                          {inspectKyc.dateOfBirth || 'Não informada'}
+                        </p>
+                        <span className="text-[10px] text-slate-500 mt-1 block">Conforme consta no BI</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-950/60 p-2.5 rounded-xl border border-emerald-800/40">
+                      <ShieldCheck className="w-4 h-4 shrink-0" />
+                      <span>Clique em <strong>"Aprovar Identidade"</strong> abaixo para liberar as compras (recargas) e depósitos para este cliente.</span>
+                    </div>
+                  </div>
+                );
+              }
 
               return (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -2429,14 +2477,14 @@ export const AdminPanel: React.FC = () => {
               );
             })()}
 
-            {/* Aviso de conformidade sem retenção permanente */}
+            {/* Informações adicionais de conformidade */}
             <div className="p-3 bg-blue-950/40 border border-blue-800/60 rounded-xl text-[11px] text-blue-200 space-y-1">
               <p className="font-bold flex items-center gap-1.5 text-blue-300">
                 <Lock className="w-3.5 h-3.5" />
-                <span>Cofre Direto AngoPayX (Privacidade e Análise sob Demanda)</span>
+                <span>Validação Administrativa de Clientes AngoPayX</span>
               </p>
               <p className="text-slate-300 leading-relaxed">
-                Os documentos são entregues diretamente pelo backend sem persistência em tabelas externas. Conforme a política de privacidade, pode visualizar os documentos para validação e, após concluir a análise, clicar em <strong>"Limpeza Cofre"</strong> para eliminar permanentemente os ficheiros.
+                A validação é baseada na conferência do Número do BI e Data de Nascimento informados pelo cliente no Perfil. A aprovação autoriza o cliente a emitir ordens de recarga e depósitos.
               </p>
             </div>
 
@@ -2456,10 +2504,10 @@ export const AdminPanel: React.FC = () => {
             <div className="flex flex-wrap gap-2 pt-2">
               <button
                 onClick={() => handleKycAction('approve')}
-                className="flex-1 min-w-[130px] py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20"
+                className="flex-1 min-w-[150px] py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Aprovar KYC</span>
+                <span>Aprovar Identidade</span>
               </button>
               <button
                 onClick={() => handleKycAction('in_review')}
@@ -2467,13 +2515,6 @@ export const AdminPanel: React.FC = () => {
               >
                 <Clock className="w-4 h-4" />
                 <span>Em Análise</span>
-              </button>
-              <button
-                onClick={() => handleKycAction('request_more')}
-                className="py-2.5 px-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"
-              >
-                <AlertTriangle className="w-4 h-4" />
-                <span>Pedir Documentos</span>
               </button>
               <button
                 onClick={() => {
@@ -2486,15 +2527,7 @@ export const AdminPanel: React.FC = () => {
                 className="py-2.5 px-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"
               >
                 <XCircle className="w-4 h-4" />
-                <span>Rejeitar</span>
-              </button>
-              <button
-                onClick={handleDeleteKycFiles}
-                className="py-2.5 px-3 bg-slate-800 hover:bg-rose-950 text-rose-400 border border-rose-800/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ml-auto"
-                title="Eliminar permanentemente os ficheiros do cofre após análise"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Limpeza Cofre</span>
+                <span>Rejeitar Dados</span>
               </button>
             </div>
           </div>
