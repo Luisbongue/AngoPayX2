@@ -61,12 +61,6 @@ export const purchaseService = {
   async createPurchase(params: CreatePurchaseParams): Promise<PurchaseOrder> {
     const { usdtAmount, paymentMethod, targetWallet, user, buyRateKz } = params;
 
-    // Strict KYC verification check
-    const isSoleAdmin = user.email?.toLowerCase() === 'luisbongue4@gmail.com';
-    if (!isSoleAdmin && user.kycStatus !== 'Aprovado') {
-      throw new Error('Validação de perfil necessária. Antes de solicitar depósitos ou recargas, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador.');
-    }
-
     const subtotalKz = usdtAmount * buyRateKz;
     const feeKz = 0;
     const totalKz = Math.round(subtotalKz + feeKz);
@@ -184,11 +178,6 @@ export const purchaseService = {
 
     if (!orderId) {
       throw new Error('ID da ordem de compra inválido.');
-    }
-
-    const isSoleAdmin = user.email?.toLowerCase() === 'luisbongue4@gmail.com';
-    if (!isSoleAdmin && user.kycStatus !== 'Aprovado') {
-      throw new Error('Validação de perfil necessária. Antes de solicitar depósitos ou recargas, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador.');
     }
 
     let uploadedReceiptUrl = receiptDataUrl || '';

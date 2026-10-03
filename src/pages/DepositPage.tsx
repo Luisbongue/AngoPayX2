@@ -17,7 +17,6 @@ import { apiClient } from '../services/api.ts';
 import { DepositOrder } from '../types/index.ts';
 import { QrCodeView } from '../components/QrCodeView.tsx';
 import { TRON_USDT_CONTRACT } from '../server/tronUtils.ts';
-import { KycRequiredBanner } from '../components/KycRequiredBanner.tsx';
 
 interface DepositPageProps {
   onNavigate?: (tab: string) => void;
@@ -74,18 +73,10 @@ export const DepositPage: React.FC<DepositPageProps> = ({ onNavigate }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const isSoleAdmin = user?.email?.toLowerCase() === 'luisbongue4@gmail.com';
-  const isKycApproved = Boolean(isSoleAdmin || user?.kycStatus === 'Aprovado');
-
   const handleSimulateBlockchainDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
     setVerifyError(null);
     setVerifySuccess(null);
-
-    if (!isKycApproved) {
-      setVerifyError('Antes de solicitar depósitos ou recargas, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador (sem fotos).');
-      return;
-    }
 
     setVerifying(true);
 
@@ -154,11 +145,6 @@ export const DepositPage: React.FC<DepositPageProps> = ({ onNavigate }) => {
           </div>
         </div>
       </div>
-
-      {/* KYC Required Banner when KYC not approved */}
-      {user && !isKycApproved && (
-        <KycRequiredBanner onNavigate={onNavigate} operationName="depósitos e transferências de fundos" />
-      )}
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -281,19 +267,13 @@ export const DepositPage: React.FC<DepositPageProps> = ({ onNavigate }) => {
 
                 <button
                   type="submit"
-                  disabled={verifying || !isKycApproved || !txidInput}
-                  className={`w-full py-2.5 rounded-xl text-xs font-bold shadow-md transition flex items-center justify-center gap-2 ${
-                    !isKycApproved
-                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
-                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                  }`}
+                  disabled={verifying || !txidInput}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold shadow-md transition flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed border border-emerald-500/30 disabled:border-slate-700"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${verifying ? 'animate-spin' : ''}`} />
                   <span>
                     {verifying
                       ? 'A validar na rede TRON...'
-                      : !isKycApproved
-                      ? 'KYC Obrigatório para Validar Depósitos'
                       : 'Validar Transação e Creditar Saldo'}
                   </span>
                 </button>

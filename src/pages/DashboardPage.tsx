@@ -15,12 +15,14 @@ import {
   CheckCircle2,
   Lock,
   Smartphone,
+  User as UserIcon,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { apiClient } from '../services/api.ts';
 import { ExchangeSettings, LedgerEntry } from '../types/index.ts';
 import { NativeAdCard } from '../components/NativeAdCard.tsx';
 import { InstallAppModal } from '../components/InstallAppModal.tsx';
+import { WhatsAppIcon, WHATSAPP_NUMBER, WHATSAPP_URL } from '../components/WhatsAppFloatingWidget.tsx';
 
 interface DashboardPageProps {
   onNavigate: (tab: string) => void;
@@ -87,25 +89,21 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base sm:text-lg font-bold text-white">Olá, {user.name}</h1>
-                {user.kycStatus === 'Aprovado' ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                    <CheckCircle2 className="w-3 h-3" /> Identidade Aprovada
-                  </span>
-                ) : user.kycStatus === 'Pendente' || user.kycStatus === 'Em análise' ? (
+                {user.documentNumber || user.idNumber ? (
                   <span
                     onClick={() => onNavigate('profile')}
-                    className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition"
-                    title="Dados de identidade em análise pelo Administrador"
+                    className="cursor-pointer inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition"
+                    title="Perfil e dados de identificação guardados na sua conta"
                   >
-                    <AlertCircle className="w-3 h-3" /> Identidade em Análise no Adm
+                    <CheckCircle2 className="w-3 h-3" /> Perfil Preenchido
                   </span>
                 ) : (
                   <span
                     onClick={() => onNavigate('profile')}
-                    className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 hover:bg-blue-500/30 transition"
-                    title="Preencha o seu BI e Data de Nascimento no Perfil antes de solicitar depósitos ou recargas"
+                    className="cursor-pointer inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700 hover:text-white transition"
+                    title="Clique para completar os dados do seu perfil"
                   >
-                    <AlertCircle className="w-3 h-3" /> Preencher BI no Perfil
+                    <UserIcon className="w-3 h-3 text-emerald-400" /> Perfil
                   </span>
                 )}
               </div>
@@ -324,6 +322,36 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           <Download className="w-4 h-4" />
           <span>Instalar no Dispositivo</span>
         </button>
+      </div>
+
+      {/* WhatsApp Official Assistance & Sales Card */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-slate-900 to-slate-900 border border-emerald-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-[#25D366] text-white flex items-center justify-center shadow-lg shadow-[#25D366]/30 shrink-0">
+            <WhatsAppIcon className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-white">Atendimento Oficial WhatsApp</h3>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#25D366]/20 text-[#25D366] border border-[#25D366]/30">
+                Suporte & Vendas
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Dúvidas sobre compras, depósitos ou recargas? Fale diretamente com a equipa pelo número <strong className="text-emerald-400 font-mono">{WHATSAPP_NUMBER}</strong>.
+            </p>
+          </div>
+        </div>
+
+        <a
+          href={WHATSAPP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-white font-bold text-xs shadow-lg shadow-[#25D366]/30 flex items-center justify-center gap-2 transition shrink-0 cursor-pointer"
+        >
+          <WhatsAppIcon className="w-4 h-4" />
+          <span>Falar no WhatsApp</span>
+        </a>
       </div>
 
       {/* Install App Modal */}

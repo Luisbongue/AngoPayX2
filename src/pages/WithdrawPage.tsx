@@ -25,7 +25,6 @@ import {
   TronLogo,
   getWalletMeta,
 } from '../components/WalletLogos.tsx';
-import { KycRequiredBanner } from '../components/KycRequiredBanner.tsx';
 
 interface WithdrawPageProps {
   onNavigate?: (tab: string) => void;
@@ -137,18 +136,10 @@ export const WithdrawPage: React.FC<WithdrawPageProps> = ({ onNavigate }) => {
   const currentFee = type === 'TRC20' ? fees.trc20WithdrawalFeeUsdt : fees.binanceWithdrawalFeeUsdt;
   const netAmount = Math.max(0, Number((amount - currentFee).toFixed(4)));
 
-  const isSoleAdmin = user?.email?.toLowerCase() === 'luisbongue4@gmail.com';
-  const isKycApproved = Boolean(isSoleAdmin || user?.kycStatus === 'Aprovado');
-
   const handleCreateWithdrawal = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
-
-    if (!isKycApproved) {
-      setError('Antes de solicitar saques ou retiradas, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador (sem fotos).');
-      return;
-    }
 
     if (validationResult && !validationResult.isValid) {
       setError(validationResult.error || 'Destino de saque inválido.');
@@ -224,11 +215,6 @@ export const WithdrawPage: React.FC<WithdrawPageProps> = ({ onNavigate }) => {
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>{success}</span>
         </div>
-      )}
-
-      {/* KYC Required Banner when KYC not approved */}
-      {user && !isKycApproved && (
-        <KycRequiredBanner onNavigate={onNavigate} operationName="saques e retiradas de USDT" />
       )}
 
       {/* Main Grid */}
@@ -466,17 +452,11 @@ export const WithdrawPage: React.FC<WithdrawPageProps> = ({ onNavigate }) => {
 
               <button
                 type="submit"
-                disabled={Boolean(loading || !isKycApproved || amount <= currentFee || amount > availableBalance || (validationResult && !validationResult.isValid))}
-                className={`w-full py-3.5 rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center gap-2 ${
-                  !isKycApproved
-                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
-                    : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-600/30'
-                }`}
+                disabled={Boolean(loading || amount <= currentFee || amount > availableBalance || (validationResult && !validationResult.isValid))}
+                className="w-full py-3.5 rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-600/30 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed"
               >
                 {loading
                   ? 'A processar saque...'
-                  : !isKycApproved
-                  ? 'Preencha Perfil para Sacar'
                   : `Confirmar e Sacar para ${currentMeta.name}`}
                 <ArrowRight className="w-4 h-4" />
               </button>

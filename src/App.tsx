@@ -22,6 +22,7 @@ import { TopAdBanner } from './components/TopAdBanner.tsx';
 import { AdvertiseModal } from './components/AdvertiseModal.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
 import { InstallAppModal } from './components/InstallAppModal.tsx';
+import { WhatsAppFloatingWidget, WHATSAPP_NUMBER, WHATSAPP_URL, WhatsAppIcon } from './components/WhatsAppFloatingWidget.tsx';
 
 function AppContent() {
   const { user } = useAuth();
@@ -122,6 +123,16 @@ function AppContent() {
                 <Megaphone className="w-3.5 h-3.5" />
                 <span>Anuncie a sua Empresa</span>
               </button>
+              <a
+                href={WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-400 font-bold hover:text-emerald-300 flex items-center gap-1.5 transition bg-emerald-950/60 px-3 py-1 rounded-lg border border-emerald-800/40"
+                title="Atendimento, Suporte e Vendas no WhatsApp"
+              >
+                <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" />
+                <span>WhatsApp: {WHATSAPP_NUMBER}</span>
+              </a>
               <button onClick={() => setCurrentTab('about')} className="hover:text-emerald-400 transition">
                 Sobre Nós
               </button>
@@ -139,13 +150,27 @@ function AppContent() {
 
           <div className="pt-6 border-t border-slate-900/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
             <p>© {new Date().getFullYear()} AngoPayX. Todos os direitos reservados. Intermediação de USDT TRC20 e Kwanza (Kz).</p>
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Conformidade com Procedimentos Rigorosos de KYC/AML</span>
+            <div className="flex flex-wrap items-center gap-4">
+              <a
+                href={WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-[#25D366] hover:underline"
+              >
+                <WhatsAppIcon className="w-3 h-3" />
+                <span>Atendimento & Vendas WhatsApp (+244 953 330 585)</span>
+              </a>
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Operações e Contas Auditadas</span>
+              </div>
             </div>
           </div>
         </div>
       </footer>
+
+      {/* WhatsApp Floating Widget (Atendimento, Suporte e Vendas) */}
+      <WhatsAppFloatingWidget />
 
       {/* Offline Indicator */}
       <OfflineIndicator />

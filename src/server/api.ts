@@ -132,26 +132,13 @@ function ensureAccountActive(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-// Helper: Strict KYC Verification Gate for Financial Operations (Deposits & Withdrawals)
+// Helper: Sem obrigação de KYC para operações financeiras (depósitos, recargas e retiradas liberados normalmente)
 function ensureKycApproved(req: Request, res: Response, next: NextFunction) {
   const user: User = (req as any).user;
   if (!user) {
     return res.status(401).json({ error: 'Sessão não autenticada. Por favor inicie sessão.' });
   }
-
-  const normEmail = user.email?.trim().toLowerCase();
-  // Administrator has full permissions
-  if (normEmail === 'luisbongue4@gmail.com' || user.role === 'super_admin') {
-    return next();
-  }
-
-  if (user.kycStatus !== 'Aprovado') {
-    return res.status(403).json({
-      error: 'Validação de perfil necessária. Antes de solicitar depósitos ou recargas, preencha a sua Data de Nascimento e Número do BI no seu Perfil e aguarde a validação do Administrador.',
-      code: 'PROFILE_IDENTITY_REQUIRED',
-    });
-  }
-  next();
+  return next();
 }
 
 // ==========================================

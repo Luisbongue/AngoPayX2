@@ -48,37 +48,165 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const CACHED_USER_KEY = 'angopayx_user_profile';
+const PERSISTED_PROFILES_KEY = 'angopayx_profiles_registry_v1';
+
+export function getPersistedProfilesMap(): Record<string, Partial<User>> {
+  try {
+    const raw = localStorage.getItem(PERSISTED_PROFILES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function getPersistedProfileForEmail(email?: string): Partial<User> | null {
+  if (!email) return null;
+  const map = getPersistedProfilesMap();
+  return map[email.toLowerCase().trim()] || null;
+}
+
+export function savePersistedProfileForEmail(email: string, data: Partial<User>) {
+  if (!email) return;
+  try {
+    const map = getPersistedProfilesMap();
+    const key = email.toLowerCase().trim();
+    map[key] = {
+      ...(map[key] || {}),
+      name: data.name || map[key]?.name,
+      documentNumber: data.documentNumber || data.idNumber || map[key]?.documentNumber,
+      idNumber: data.idNumber || data.documentNumber || map[key]?.idNumber,
+      dateOfBirth: data.dateOfBirth || map[key]?.dateOfBirth,
+      phone: data.phone || map[key]?.phone,
+      nationality: data.nationality || map[key]?.nationality,
+    };
+    localStorage.setItem(PERSISTED_PROFILES_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+function getCachedUserProfile(): User | null {
+  try {
+    const raw = localStorage.getItem(CACHED_USER_KEY);
+    if (!raw) return null;
+    const parsed: User = JSON.parse(raw);
+    if (parsed && parsed.email) {
+      const persisted = getPersistedProfileForEmail(parsed.email);
+      if (persisted) {
+        return {
+          ...parsed,
+          name: parsed.name || persisted.name || parsed.name,
+          documentNumber: parsed.documentNumber || persisted.documentNumber,
+          idNumber: parsed.idNumber || persisted.idNumber,
+          dateOfBirth: parsed.dateOfBirth || persisted.dateOfBirth,
+          phone: parsed.phone || persisted.phone,
+          nationality: parsed.nationality || persisted.nationality || 'Angolana',
+        };
+      }
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedUserProfile(u: User | null) {
+  try {
+    if (u) {
+      localStorage.setItem(CACHED_USER_KEY, JSON.stringify(u));
+    } else {
+      localStorage.removeItem(CACHED_USER_KEY);
+    }
+  } catch {}
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUserState] = useState<User | null>(() => getCachedUserProfile());
   const [balance, setBalance] = useState<Balance | null>(null);
   const [kyc, setKyc] = useState<KycRecord | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const setUser = (u: User | null) => {
+    if (u && u.email) {
+      if (u.documentNumber || u.dateOfBirth) {
+        savePersistedProfileForEmail(u.email, u);
+      } else {
+        const persisted = getPersistedProfileForEmail(u.email);
+        if (persisted) {
+          u = {
+            ...u,
+            name: u.name || persisted.name || u.name,
+            documentNumber: u.documentNumber || persisted.documentNumber,
+            idNumber: u.idNumber || persisted.idNumber,
+            dateOfBirth: u.dateOfBirth || persisted.dateOfBirth,
+            phone: u.phone || persisted.phone,
+            nationality: u.nationality || persisted.nationality || 'Angolana',
+          };
+        }
+      }
+    }
+    setUserState(u);
+    setCachedUserProfile(u);
+  };
+
   const refreshUser = useCallback(async () => {
-    const token = getStoredToken();
+    let token = getStoredToken();
 
     try {
-      // 1. Recover user directly from Supabase Auth session
+      // If token not yet present in localStorage, try getting session from Supabase
+      if (!token && isSupabaseConfigured) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session?.access_token) {
+          token = sessionData.session.access_token;
+          setStoredToken(token);
+        }
+      }
+
+      // 1. Prioritize authoritative user data from backend API
+      if (token) {
+        try {
+          const data = await apiClient.getMe();
+          if (data.user) {
+            setUser(data.user);
+          }
+          if (data.balance) setBalance(data.balance);
+          if (data.kyc) setKyc(data.kyc);
+          setError(null);
+          setIsLoading(false);
+          return;
+        } catch (apiErr: any) {
+          console.warn('API getMe em segundo plano:', apiErr?.message);
+        }
+      }
+
+      // 2. Recover user directly from Supabase Auth session as fallback
       if (isSupabaseConfigured) {
         const { data: { user: supaUser }, error: supaErr } = await supabase.auth.getUser();
         if (supaUser && !supaErr) {
+          const cached = getCachedUserProfile();
           const role = (supaUser.email && ['luisbongue4@gmail.com'].includes(supaUser.email.toLowerCase()))
             ? 'super_admin'
-            : ((supaUser.user_metadata?.role as any) || 'client');
+            : ((supaUser.user_metadata?.role as any) || cached?.role || 'client');
+
+          const emailKey = supaUser.email || cached?.email || '';
+          const persisted = getPersistedProfileForEmail(emailKey);
 
           const currentU: User = {
             id: supaUser.id,
-            name: supaUser.user_metadata?.name || supaUser.email?.split('@')[0] || 'Utilizador',
-            email: supaUser.email || '',
-            phone: supaUser.user_metadata?.phone || '',
+            name: supaUser.user_metadata?.name || persisted?.name || cached?.name || supaUser.email?.split('@')[0] || 'Utilizador',
+            email: emailKey,
+            phone: supaUser.user_metadata?.phone || persisted?.phone || cached?.phone || '',
+            documentNumber: supaUser.user_metadata?.documentNumber || supaUser.user_metadata?.idNumber || persisted?.documentNumber || cached?.documentNumber || cached?.idNumber || undefined,
+            idNumber: supaUser.user_metadata?.documentNumber || supaUser.user_metadata?.idNumber || persisted?.idNumber || cached?.documentNumber || cached?.idNumber || undefined,
+            dateOfBirth: supaUser.user_metadata?.dateOfBirth || persisted?.dateOfBirth || cached?.dateOfBirth || undefined,
+            nationality: supaUser.user_metadata?.nationality || persisted?.nationality || cached?.nationality || 'Angolana',
             role,
             accountStatus: 'Ativa',
-            kycStatus: role !== 'client' ? 'Aprovado' : 'Não iniciado',
+            kycStatus: (supaUser.user_metadata?.kycStatus as any) || cached?.kycStatus || 'Aprovado',
             emailVerified: Boolean(supaUser.email_confirmed_at),
             passwordHash: '',
             createdAt: supaUser.created_at,
-            depositAddressTRC20: `T${supaUser.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 33)}`,
+            depositAddressTRC20: cached?.depositAddressTRC20 || `T${supaUser.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 33)}`,
           };
           setUser(currentU);
         } else if (!token) {
@@ -87,19 +215,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setKyc(null);
           setIsLoading(false);
           return;
-        }
-      }
-
-      // 2. Sync extended backend data (balance, kyc, ledger) if backend API is reachable
-      if (token) {
-        try {
-          const data = await apiClient.getMe();
-          if (data.user) setUser(data.user);
-          if (data.balance) setBalance(data.balance);
-          if (data.kyc) setKyc(data.kyc);
-          setError(null);
-        } catch (apiErr: any) {
-          console.warn('API getMe em segundo plano:', apiErr?.message);
         }
       }
     } catch (err: any) {
@@ -159,22 +274,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (data.user) {
+          const cached = getCachedUserProfile();
           const role = (data.user.email && ['luisbongue4@gmail.com'].includes(data.user.email.toLowerCase()))
             ? 'super_admin'
-            : ((data.user.user_metadata?.role as any) || 'client');
+            : ((data.user.user_metadata?.role as any) || cached?.role || 'client');
+
+          const emailKey = data.user.email || credentials.email.trim();
+          const persisted = getPersistedProfileForEmail(emailKey);
 
           const localUser: User = {
             id: data.user.id,
-            name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'Utilizador',
-            email: data.user.email || credentials.email.trim(),
-            phone: data.user.user_metadata?.phone || '',
+            name: data.user.user_metadata?.name || persisted?.name || cached?.name || data.user.email?.split('@')[0] || 'Utilizador',
+            email: emailKey,
+            phone: data.user.user_metadata?.phone || persisted?.phone || cached?.phone || '',
+            documentNumber: data.user.user_metadata?.documentNumber || data.user.user_metadata?.idNumber || persisted?.documentNumber || cached?.documentNumber || cached?.idNumber || undefined,
+            idNumber: data.user.user_metadata?.documentNumber || data.user.user_metadata?.idNumber || persisted?.idNumber || cached?.documentNumber || cached?.idNumber || undefined,
+            dateOfBirth: data.user.user_metadata?.dateOfBirth || persisted?.dateOfBirth || cached?.dateOfBirth || undefined,
+            nationality: data.user.user_metadata?.nationality || persisted?.nationality || cached?.nationality || 'Angolana',
             role,
             accountStatus: 'Ativa',
-            kycStatus: role !== 'client' ? 'Aprovado' : 'Não iniciado',
+            kycStatus: (data.user.user_metadata?.kycStatus as any) || cached?.kycStatus || 'Aprovado',
             emailVerified: Boolean(data.user.email_confirmed_at),
             passwordHash: '',
             createdAt: data.user.created_at,
-            depositAddressTRC20: `T${data.user.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 33)}`,
+            depositAddressTRC20: cached?.depositAddressTRC20 || `T${data.user.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 33)}`,
           };
           setUser(localUser);
         }

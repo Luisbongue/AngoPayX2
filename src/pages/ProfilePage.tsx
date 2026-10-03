@@ -16,8 +16,9 @@ import {
   ArrowRight,
   RefreshCw,
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext.tsx';
+import { useAuth, savePersistedProfileForEmail } from '../context/AuthContext.tsx';
 import { apiClient } from '../services/api.ts';
+import { supabase, isSupabaseConfigured } from '../lib/supabase.ts';
 
 interface ProfilePageProps {
   onNavigate: (tab: string) => void;
@@ -81,15 +82,46 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate }) => {
         nationality: nationality.trim() || 'Angolana',
       });
 
-      setSuccess(res.message || 'Dados enviados com sucesso para validação do Administrador.');
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.auth.updateUser({
+            data: {
+              name: fullName.trim(),
+              documentNumber: documentNumber.trim(),
+              idNumber: documentNumber.trim(),
+              dateOfBirth: dateOfBirth.trim(),
+              phone: phone.trim(),
+              nationality: nationality.trim() || 'Angolana',
+            },
+          });
+        } catch (supaErr) {
+          console.warn('Supabase updateUser metadata:', supaErr);
+        }
+      }
+
+      // Guardar na persistência local permanente para nunca perder ao atualizar ou terminar sessão
+      if (user.email) {
+        savePersistedProfileForEmail(user.email, {
+          name: fullName.trim(),
+          documentNumber: documentNumber.trim(),
+          idNumber: documentNumber.trim(),
+          dateOfBirth: dateOfBirth.trim(),
+          phone: phone.trim(),
+          nationality: nationality.trim() || 'Angolana',
+        });
+      }
+
+      setSuccess('Dados do perfil guardados com sucesso! Ficam salvos na sua conta e não precisa preencher novamente.');
       await refreshUser();
     } catch (err: any) {
       console.error('[Profile Submit Error]:', err);
-      setError(err.message || 'Erro ao enviar dados para validação.');
+      setError(err.message || 'Erro ao guardar dados do perfil.');
     } finally {
       setLoading(false);
     }
   };
+
+  const isProfileFilled = Boolean(user.documentNumber || user.idNumber);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -130,15 +162,15 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate }) => {
         </button>
       </div>
 
-      {/* Compliance / Status Alert Banner */}
-      {isApproved ? (
+      {/* Status Banner */}
+      {isProfileFilled ? (
         <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-emerald-300 text-xs">
           <div className="flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
             <div>
-              <p className="font-bold text-white">Identidade Validada e Aprovada</p>
+              <p className="font-bold text-white">Dados do Perfil Guardados com Sucesso</p>
               <p className="text-slate-300 text-[11px] mt-0.5">
-                Os seus dados foram validados pelo Administrador. A sua conta tem acesso total a compras (recargas), depósitos e retiradas.
+                O seu Número do BI (<strong className="text-emerald-400 font-mono">{user.documentNumber || user.idNumber}</strong>) e Data de Nascimento (<strong className="text-white">{user.dateOfBirth}</strong>) estão salvos na sua conta e não serão perdidos ao atualizar a página ou terminar sessão.
               </p>
             </div>
           </div>
@@ -158,23 +190,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate }) => {
             </button>
           </div>
         </div>
-      ) : isPending ? (
-        <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-500/40 flex items-start gap-3 text-amber-300 text-xs">
-          <Clock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5 animate-pulse" />
-          <div className="space-y-1">
-            <p className="font-bold text-white">Identidade em Análise pelo Administrador</p>
-            <p className="text-slate-300 leading-relaxed text-[11px]">
-              O seu Número de Bilhete de Identidade e Data de Nascimento foram enviados para validação do Administrador. Não é necessário enviar nenhuma foto. Assim que o administrador aprovar os dados, as opções de recargas e depósitos estarão liberadas.
-            </p>
-          </div>
-        </div>
       ) : (
-        <div className="p-4 rounded-xl bg-blue-950/40 border border-blue-800/60 flex items-start gap-3 text-blue-200 text-xs">
-          <ShieldAlert className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex items-start gap-3 text-slate-300 text-xs">
+          <FileText className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="font-bold text-white">Preencha os seus Dados antes de solicitar Recargas ou Depósitos</p>
-            <p className="text-slate-300 leading-relaxed text-[11px]">
-              Para realizar depósitos ou recargas (compras de USDT), deve preencher a sua <strong>Data de Nascimento</strong> e o <strong>Número do Bilhete de Identidade (BI)</strong> abaixo. Esses dados serão validados pelo Administrador diretamente, sem necessidade de fotos.
+            <p className="font-bold text-white">Preencha os Dados do seu Perfil</p>
+            <p className="text-slate-400 leading-relaxed text-[11px]">
+              Informe o seu Nome, Data de Nascimento e Número do Bilhete de Identidade (BI). Basta preencher uma única vez e os dados ficam guardados definitivamente na sua conta. Depósitos e recargas funcionam normalmente sem nenhuma obrigação de envio de fotos.
             </p>
           </div>
         </div>
@@ -221,8 +243,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate }) => {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Nome completo conforme consta no BI"
-                  disabled={isApproved}
-                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition disabled:opacity-75"
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
                 />
               </div>
 
@@ -236,8 +257,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate }) => {
                     value={documentNumber}
                     onChange={(e) => setDocumentNumber(e.target.value.toUpperCase())}
                     placeholder="Ex: 005432123LA045"
-                    disabled={isApproved}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition disabled:opacity-75 uppercase"
+                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition uppercase"
                   />
                   <span className="text-[10px] text-slate-500 mt-1 block">
                     Formato angolano com 9 dígitos e letras.
@@ -252,8 +272,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate }) => {
                     type="date"
                     value={dateOfBirth}
                     onChange={(e) => setDateOfBirth(e.target.value)}
-                    disabled={isApproved}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500 transition disabled:opacity-75"
+                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500 transition"
                   />
                   <span className="text-[10px] text-slate-500 mt-1 block">
                     Necessário para conferência com o BI.
@@ -271,8 +290,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate }) => {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+244 923 000 000"
-                    disabled={isApproved}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition disabled:opacity-75"
+                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
                   />
                 </div>
 
@@ -285,38 +303,35 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate }) => {
                     value={nationality}
                     onChange={(e) => setNationality(e.target.value)}
                     placeholder="Angolana"
-                    disabled={isApproved}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition disabled:opacity-75"
+                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
                   />
                 </div>
               </div>
 
-              {!isApproved && (
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2"
-                  >
-                    {loading ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>A enviar dados para o Administrador...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" />
-                        <span>
-                          {isPending ? 'Atualizar Dados do Perfil' : 'Guardar e Enviar para o Administrador'}
-                        </span>
-                      </>
-                    )}
-                  </button>
-                  <p className="text-[11px] text-center text-slate-400 mt-2">
-                    ✓ Sem envio de fotos ou ficheiros pesados. Os dados vão diretamente para a fila do Administrador.
-                  </p>
-                </div>
-              )}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>A guardar dados do perfil...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>
+                        {isProfileFilled ? 'Atualizar Dados do Perfil' : 'Guardar Dados do Perfil'}
+                      </span>
+                    </>
+                  )}
+                </button>
+                <p className="text-[11px] text-center text-slate-400 mt-2">
+                  ✓ Fica salvo permanentemente na sua conta. Não precisa preencher novamente ao atualizar a página ou terminar sessão.
+                </p>
+              </div>
             </form>
           </div>
         </div>

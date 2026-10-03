@@ -13,7 +13,6 @@ import {
 import { useAuth } from '../context/AuthContext.tsx';
 import { apiClient } from '../services/api.ts';
 import { ExchangeSettings, SaleOrder } from '../types/index.ts';
-import { KycRequiredBanner } from '../components/KycRequiredBanner.tsx';
 
 const ANGOLAN_BANKS = [
   'Banco Angolano de Investimentos (BAI)',
@@ -75,18 +74,10 @@ export const SellPage: React.FC<SellPageProps> = ({ onNavigate }) => {
   const feeKz = 0; // Current Rule: 0 Kz withdrawal fee
   const totalKzToReceive = Math.round(usdtAmount * sellRateKz - feeKz);
 
-  const isSoleAdmin = user?.email?.toLowerCase() === 'luisbongue4@gmail.com';
-  const isKycApproved = Boolean(isSoleAdmin || user?.kycStatus === 'Aprovado');
-
   const handleCreateSale = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
-
-    if (!isKycApproved) {
-      setError('Antes de solicitar vendas ou retiradas, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador (sem fotos).');
-      return;
-    }
 
     if (usdtAmount <= 0) {
       setError('A quantidade de USDT a vender deve ser maior que zero.');
@@ -159,11 +150,6 @@ export const SellPage: React.FC<SellPageProps> = ({ onNavigate }) => {
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>{success}</span>
         </div>
-      )}
-
-      {/* KYC Required Banner when KYC not approved */}
-      {user && !isKycApproved && (
-        <KycRequiredBanner onNavigate={onNavigate} operationName="retiradas e levantamentos de fundos" />
       )}
 
       {/* Main Grid */}
@@ -302,17 +288,11 @@ export const SellPage: React.FC<SellPageProps> = ({ onNavigate }) => {
 
               <button
                 type="submit"
-                disabled={loading || !isKycApproved || usdtAmount <= 0 || usdtAmount > availableBalance}
-                className={`w-full py-3.5 rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center gap-2 ${
-                  !isKycApproved
-                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
-                    : 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30'
-                }`}
+                disabled={loading || usdtAmount <= 0 || usdtAmount > availableBalance}
+                className="w-full py-3.5 rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed"
               >
                 {loading
                   ? 'A processar ordem...'
-                  : !isKycApproved
-                  ? 'Preencha Perfil para Vender'
                   : 'Confirmar Venda e Receber Kwanzas'}
                 <ArrowRight className="w-4 h-4" />
               </button>

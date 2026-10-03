@@ -25,6 +25,7 @@ import { useAuth } from '../context/AuthContext.tsx';
 import { apiClient } from '../services/api.ts';
 import { ExchangeSettings } from '../types/index.ts';
 import { PWAInstallButton } from './PWAInstallButton.tsx';
+import { WHATSAPP_NUMBER, WHATSAPP_URL, WhatsAppIcon } from './WhatsAppFloatingWidget.tsx';
 
 interface NavbarProps {
   currentTab: string;
@@ -159,6 +160,18 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onOpe
 
           {/* Right Action Controls */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* WhatsApp Support Direct Button */}
+            <a
+              href={WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-500/30 text-emerald-300 hover:text-white transition shadow-sm"
+              title={`WhatsApp: ${WHATSAPP_NUMBER} (Atendimento, Suporte e Vendas)`}
+            >
+              <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" />
+              <span className="hidden xl:inline">WhatsApp</span>
+            </a>
+
             {/* PWA Install Button */}
             <PWAInstallButton />
 
@@ -251,8 +264,23 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, onOpe
       {isMobileMenuOpen && (
         <div className="lg:hidden border-t border-slate-800 bg-slate-900 px-4 pt-3 pb-6 space-y-1">
           {/* Mobile Install Button */}
-          <div className="mb-3">
+          <div className="mb-3 space-y-2">
             <PWAInstallButton variant="full" />
+            <a
+              href={WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold bg-[#25D366]/15 hover:bg-[#25D366]/25 text-[#25D366] border border-[#25D366]/30 transition shadow-sm"
+              title={`WhatsApp: ${WHATSAPP_NUMBER}`}
+            >
+              <div className="flex items-center gap-2">
+                <WhatsAppIcon className="w-4 h-4 text-[#25D366]" />
+                <span>WhatsApp: {WHATSAPP_NUMBER}</span>
+              </div>
+              <span className="text-[10px] uppercase font-bold bg-[#25D366]/20 px-2 py-0.5 rounded text-white">
+                Atendimento
+              </span>
+            </a>
           </div>
 
           {user && (

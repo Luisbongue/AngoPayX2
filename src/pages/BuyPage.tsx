@@ -37,7 +37,7 @@ import {
   validateBybitIdentifier,
   validateRedotPayIdentifier,
 } from '../server/tronUtils.ts';
-import { KycRequiredBanner } from '../components/KycRequiredBanner.tsx';
+import { WhatsAppIcon, WHATSAPP_NUMBER, WHATSAPP_URL } from '../components/WhatsAppFloatingWidget.tsx';
 
 interface BuyPageProps {
   onNavigate?: (tab: string) => void;
@@ -67,9 +67,6 @@ export const BuyPage: React.FC<BuyPageProps> = ({ onNavigate }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [receiptDataUrl, setReceiptDataUrl] = useState<string>('');
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
-
-  const isSoleAdmin = user?.email?.toLowerCase() === 'luisbongue4@gmail.com';
-  const isKycApproved = Boolean(isSoleAdmin || user?.kycStatus === 'Aprovado');
 
   useEffect(() => {
     loadConfig();
@@ -168,14 +165,6 @@ export const BuyPage: React.FC<BuyPageProps> = ({ onNavigate }) => {
       return;
     }
 
-    const isSoleAdmin = user?.email?.toLowerCase() === 'luisbongue4@gmail.com';
-    const isKycApproved = Boolean(isSoleAdmin || user?.kycStatus === 'Aprovado');
-
-    if (!isKycApproved) {
-      setError('Antes de solicitar recargas ou depósitos, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador.');
-      return;
-    }
-
     if (targetPlatform !== 'ANGOPAYX') {
       if (!targetIdentifier.trim()) {
         setError(`Por favor forneça o identificador ou e-mail da sua conta ${targetPlatform}.`);
@@ -250,13 +239,6 @@ export const BuyPage: React.FC<BuyPageProps> = ({ onNavigate }) => {
 
     if (!user) {
       setError('Sessão expirada. Por favor autentique-se para continuar.');
-      return;
-    }
-
-    const isSoleAdmin = user?.email?.toLowerCase() === 'luisbongue4@gmail.com';
-    const isKycApproved = Boolean(isSoleAdmin || user?.kycStatus === 'Aprovado');
-    if (!isKycApproved) {
-      setError('Antes de solicitar recargas ou depósitos, preencha a sua Data de Nascimento e Número do BI no seu Perfil para validação do Administrador.');
       return;
     }
 
@@ -337,11 +319,6 @@ export const BuyPage: React.FC<BuyPageProps> = ({ onNavigate }) => {
           <Check className="w-4 h-4 shrink-0" />
           <span>{success}</span>
         </div>
-      )}
-
-      {/* KYC Required Banner when KYC not approved */}
-      {user && !isKycApproved && (
-        <KycRequiredBanner onNavigate={onNavigate} operationName="depósitos e compras de USDT" />
       )}
 
       {/* Main Grid */}
@@ -647,21 +624,14 @@ export const BuyPage: React.FC<BuyPageProps> = ({ onNavigate }) => {
                 <button
                   type="submit"
                   disabled={Boolean(
-                    !isKycApproved ||
-                      loading ||
+                    loading ||
                       usdtAmount <= 0 ||
                       (targetPlatform !== 'ANGOPAYX' &&
                         (!targetIdentifier.trim() || (validationResult && !validationResult.isValid)))
                   )}
-                  className={`w-full py-3.5 rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center gap-2 ${
-                    !isKycApproved
-                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
-                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30'
-                  }`}
+                  className="w-full py-3.5 rounded-xl text-sm font-bold shadow-lg transition flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed"
                 >
-                  {!isKycApproved
-                    ? 'Preencha o Perfil antes de Comprar / Recarregar'
-                    : loading
+                  {loading
                     ? 'A criar ordem...'
                     : `Prosseguir para Carga na ${currentMeta.name}`}
                   <ArrowRight className="w-4 h-4" />
@@ -928,6 +898,22 @@ export const BuyPage: React.FC<BuyPageProps> = ({ onNavigate }) => {
                   >
                     4. USDT Creditado
                   </div>
+                </div>
+
+                {/* WhatsApp Support Link for active order */}
+                <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+                  <span className="text-slate-400 text-[11px]">Dúvidas ou envio de comprovativo alternativo?</span>
+                  <a
+                    href={`https://wa.me/244953330585?text=${encodeURIComponent(
+                      `Olá! Tenho a ordem de compra ${activeOrder.id} (${activeOrder.usdtAmount} USDT / ${activeOrder.totalKz.toLocaleString()} Kz) no AngoPayX e gostaria de atendimento.`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#25D366]/15 hover:bg-[#25D366]/25 text-[#25D366] border border-[#25D366]/30 font-bold transition"
+                  >
+                    <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" />
+                    <span>Apoio WhatsApp ({WHATSAPP_NUMBER})</span>
+                  </a>
                 </div>
               </div>
             </div>
