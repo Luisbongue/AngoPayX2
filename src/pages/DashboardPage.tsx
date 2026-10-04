@@ -27,13 +27,11 @@ import { WhatsAppIcon, WHATSAPP_NUMBER, WHATSAPP_URL } from '../components/Whats
 interface DashboardPageProps {
   onNavigate: (tab: string) => void;
   onOpenAuthModal: () => void;
-  onOpenAdvertiseModal?: () => void;
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({
   onNavigate,
   onOpenAuthModal,
-  onOpenAdvertiseModal,
 }) => {
   const { user, balance, refreshUser } = useAuth();
   const [rates, setRates] = useState<ExchangeSettings>({
@@ -361,7 +359,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       />
 
       {/* Native Sponsored Cards / Ad Monetization */}
-      <NativeAdCard onOpenAdvertiseModal={onOpenAdvertiseModal} />
+      <NativeAdCard />
 
       {/* Recent Ledger Activity */}
       <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">

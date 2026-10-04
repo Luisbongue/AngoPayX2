@@ -2840,31 +2840,31 @@ apiRouter.post(
       inquiryId,
     } = req.body;
 
-    if (!companyName || !title || !description || !destinationUrl) {
-      return res.status(400).json({ error: 'Preencha o Nome da Empresa, Título, Descrição e Link de Destino do anúncio.' });
+    if (!title || !destinationUrl) {
+      return res.status(400).json({ error: 'Preencha o Título e o Link do Produto a ser divulgado.' });
     }
 
     const newAd = db.createAd({
-      companyName: companyName.trim(),
       title: title.trim(),
-      description: description.trim(),
-      callToAction: callToAction?.trim() || 'Saber Mais',
       destinationUrl: destinationUrl.trim(),
       bannerUrl: bannerUrl?.trim() || undefined,
-      badgeText: badgeText?.trim() || 'Patrocinado',
-      placement: placement || 'dashboard_native',
+      companyName: companyName?.trim() || title.trim(),
+      description: description?.trim() || title.trim(),
+      callToAction: callToAction?.trim() || 'Ver Produto',
+      badgeText: badgeText?.trim() || 'Destaque',
+      placement: placement || 'all',
       status: status || 'active',
-      priority: Number(priority) || 5,
+      priority: Number(priority) || 10,
       category: category?.trim() || 'Geral',
-      pricing: {
+      pricing: pricing ? {
         amountKz: Number(pricing?.amountKz) || 0,
         amountUsdt: Number(pricing?.amountUsdt) || 0,
-        billingModel: pricing?.billingModel || 'monthly',
+        billingModel: pricing?.billingModel || 'fixed',
         isPaid: pricing?.isPaid !== false,
         notes: pricing?.notes?.trim(),
-      },
+      } : undefined,
       startDate: startDate || new Date().toISOString(),
-      endDate: endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      endDate: endDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
       contactEmail: contactEmail?.trim(),
       contactPhone: contactPhone?.trim(),
       inquiryId: inquiryId || undefined,
@@ -2877,7 +2877,7 @@ apiRouter.post(
       resource: 'ads',
       relatedId: newAd.id,
       result: 'SUCCESS',
-      note: `Anúncio criado para a empresa "${newAd.companyName}" (Posição: ${newAd.placement}, Valor: ${newAd.pricing.amountKz} Kz).`,
+      note: `Anúncio criado: "${newAd.title}" (Link: ${newAd.destinationUrl}).`,
     });
 
     return res.status(201).json({ message: 'Anúncio publicado com sucesso.', ad: newAd });

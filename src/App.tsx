@@ -17,9 +17,8 @@ import { AboutPage } from './pages/AboutPage.tsx';
 import { TermsPage } from './pages/TermsPage.tsx';
 import { PrivacyPage } from './pages/PrivacyPage.tsx';
 import { AdminPanel } from './pages/AdminPanel.tsx';
-import { ShieldCheck, Heart, ArrowUpRight, Megaphone, Smartphone } from 'lucide-react';
+import { ShieldCheck, Heart, ArrowUpRight, Smartphone } from 'lucide-react';
 import { TopAdBanner } from './components/TopAdBanner.tsx';
-import { AdvertiseModal } from './components/AdvertiseModal.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
 import { InstallAppModal } from './components/InstallAppModal.tsx';
 import { WhatsAppFloatingWidget, WHATSAPP_NUMBER, WHATSAPP_URL, WhatsAppIcon } from './components/WhatsAppFloatingWidget.tsx';
@@ -28,7 +27,6 @@ function AppContent() {
   const { user } = useAuth();
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
-  const [isAdvertiseModalOpen, setIsAdvertiseModalOpen] = useState<boolean>(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState<boolean>(false);
 
   const renderContent = () => {
@@ -38,7 +36,6 @@ function AppContent() {
           <DashboardPage
             onNavigate={(tab) => setCurrentTab(tab)}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
-            onOpenAdvertiseModal={() => setIsAdvertiseModalOpen(true)}
           />
         );
       case 'buy':
@@ -73,7 +70,6 @@ function AppContent() {
           <DashboardPage
             onNavigate={(tab) => setCurrentTab(tab)}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
-            onOpenAdvertiseModal={() => setIsAdvertiseModalOpen(true)}
           />
         );
     }
@@ -88,7 +84,7 @@ function AppContent() {
       />
 
       {/* Top Banner Advertisement (Rotativo) */}
-      <TopAdBanner onOpenAdvertiseModal={() => setIsAdvertiseModalOpen(true)} />
+      <TopAdBanner />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 box-border overflow-hidden">
         {renderContent()}
@@ -115,13 +111,6 @@ function AppContent() {
               >
                 <Smartphone className="w-3.5 h-3.5" />
                 <span>Instalar Aplicativo</span>
-              </button>
-              <button
-                onClick={() => setIsAdvertiseModalOpen(true)}
-                className="text-emerald-400 font-bold hover:text-emerald-300 flex items-center gap-1 transition"
-              >
-                <Megaphone className="w-3.5 h-3.5" />
-                <span>Anuncie a sua Empresa</span>
               </button>
               <a
                 href={WHATSAPP_URL}
@@ -179,12 +168,6 @@ function AppContent() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
-      />
-
-      {/* Advertise With Us Modal */}
-      <AdvertiseModal
-        isOpen={isAdvertiseModalOpen}
-        onClose={() => setIsAdvertiseModalOpen(false)}
       />
 
       {/* Install App Modal */}

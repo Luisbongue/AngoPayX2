@@ -137,121 +137,8 @@ function getInitialDatabase(): DatabaseSchema {
     auditLogs: [],
     processedTxids: [],
     reconciliationHistory: [],
-    advertisements: [
-      {
-        id: 'ad-unitel-001',
-        companyName: 'Unitel Money Angola',
-        title: 'Recargas & Pagamentos em Kwanza sem Taxa Adicional',
-        description: 'Transfira saldo para a sua carteira digital ou pague no comércio com a maior rede móvel de Angola.',
-        callToAction: 'Saber Mais',
-        destinationUrl: 'https://www.unitel.ao/unitel-money/',
-        bannerUrl: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=800&q=80',
-        badgeText: 'Patrocinador Oficial',
-        placement: 'top_banner',
-        status: 'active',
-        priority: 10,
-        category: 'Telecom & Finanças',
-        pricing: {
-          amountKz: 450000,
-          amountUsdt: 333,
-          billingModel: 'monthly',
-          isPaid: true,
-          notes: 'Contrato corporativo trimestral (Renovação automática)',
-        },
-        impressions: 1420,
-        clicks: 184,
-        startDate: '2026-02-01T00:00:00.000Z',
-        endDate: '2026-12-31T23:59:59.000Z',
-        createdAt: '2026-02-01T10:00:00.000Z',
-        updatedAt: '2026-02-01T10:00:00.000Z',
-        contactEmail: 'parcerias@unitelmoney.ao',
-        contactPhone: '+244 923 111 222',
-      },
-      {
-        id: 'ad-bai-002',
-        companyName: 'Banco BAI Directo',
-        title: 'Conta Digital BAI para Câmbio e Operações de Negócios',
-        description: 'Abra a sua conta digital BAI em minutos e movimente Kwanza com máxima conformidade bancária.',
-        callToAction: 'Abrir Conta Online',
-        destinationUrl: 'https://www.bancobai.ao/',
-        bannerUrl: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=800&q=80',
-        badgeText: 'Destaque Bancário',
-        placement: 'dashboard_native',
-        status: 'active',
-        priority: 8,
-        category: 'Banca Comercial',
-        pricing: {
-          amountKz: 600000,
-          amountUsdt: 444,
-          billingModel: 'monthly',
-          isPaid: true,
-          notes: 'Campanha de expansão de contas bancárias digitais',
-        },
-        impressions: 2190,
-        clicks: 312,
-        startDate: '2026-02-10T00:00:00.000Z',
-        endDate: '2026-11-30T23:59:59.000Z',
-        createdAt: '2026-02-10T08:00:00.000Z',
-        updatedAt: '2026-02-10T08:00:00.000Z',
-        contactEmail: 'empresas@bancobai.ao',
-        contactPhone: '+244 222 696 900',
-      },
-      {
-        id: 'ad-kwanzapay-003',
-        companyName: 'KwanzaPay Gateway',
-        title: 'Receba Pagamentos Online na sua Loja Virtual em Luanda',
-        description: 'A API de pagamentos angolana mais simples para e-commerce. Aceite Multicaixa Express e USDT.',
-        callToAction: 'Integrar API',
-        destinationUrl: 'https://kwanzapay.ao',
-        bannerUrl: 'https://images.unsplash.com/photo-1556742049-0a67c5574f73?auto=format&fit=crop&w=800&q=80',
-        badgeText: 'Parceiro Tecnológico',
-        placement: 'sidebar',
-        status: 'active',
-        priority: 5,
-        category: 'E-commerce & TI',
-        pricing: {
-          amountKz: 300000,
-          amountUsdt: 222,
-          billingModel: 'monthly',
-          isPaid: true,
-          notes: 'Plano de visibilidade para desenvolvedores e lojistas',
-        },
-        impressions: 980,
-        clicks: 145,
-        startDate: '2026-03-01T00:00:00.000Z',
-        endDate: '2026-10-31T23:59:59.000Z',
-        createdAt: '2026-03-01T12:00:00.000Z',
-        updatedAt: '2026-03-01T12:00:00.000Z',
-        contactEmail: 'devs@kwanzapay.ao',
-        contactPhone: '+244 944 888 999',
-      },
-    ],
-    adInquiries: [
-      {
-        id: 'inq-001',
-        companyName: 'Angola Express Logística Lda',
-        contactPerson: 'Carlos Vandúnem',
-        email: 'marketing@angolaexpress.co.ao',
-        phone: '+244 923 456 789',
-        budget: '400.000 Kz / mês',
-        preferredPlacement: 'dashboard_native',
-        message: 'Gostaríamos de colocar um banner promovendo o nosso serviço de entregas rápidas de encomendas e documentos em Luanda e Benguela para os vossos clientes empresariais.',
-        status: 'pending',
-        createdAt: '2026-03-15T14:30:00.000Z',
-      },
-      {
-        id: 'inq-002',
-        companyName: 'Tchilar Facturação Certificada AGT',
-        contactPerson: 'Engª Nádia Morais',
-        email: 'comercial@tchilar.ao',
-        phone: '+244 945 112 334',
-        budget: '250 USDT / mês',
-        preferredPlacement: 'top_banner',
-        message: 'Pretendemos anunciar o nosso software na nuvem com emissão de faturas certificadas pela AGT para comerciantes de criptoactivos e cambistas.',
-        status: 'pending',
-        createdAt: '2026-03-18T09:15:00.000Z',
-      },
-    ],
+    advertisements: [],
+    adInquiries: [],
   };
 }
 
@@ -274,13 +161,11 @@ class StorageEngine {
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
-        const initial = getInitialDatabase();
-        // Ensure new collections are populated if older database file exists
-        if (!parsed.advertisements || parsed.advertisements.length === 0) {
-          parsed.advertisements = initial.advertisements;
+        if (!parsed.advertisements) {
+          parsed.advertisements = [];
         }
-        if (!parsed.adInquiries || parsed.adInquiries.length === 0) {
-          parsed.adInquiries = initial.adInquiries;
+        if (!parsed.adInquiries) {
+          parsed.adInquiries = [];
         }
         this.saveDatabase(parsed);
         return parsed;

@@ -375,28 +375,28 @@ export type AdStatus = 'active' | 'paused' | 'expired';
 
 export interface Advertisement {
   id: string;
-  companyName: string;
   title: string;
-  description: string;
-  callToAction: string;
   destinationUrl: string;
   bannerUrl?: string;
-  badgeText: string;
-  placement: AdPlacement;
   status: AdStatus;
-  priority: number; // 1 to 10 (higher priority ads appear first/more frequently)
-  category: string;
-  pricing: {
-    amountKz: number;
+  companyName?: string;
+  description?: string;
+  callToAction?: string;
+  badgeText?: string;
+  placement?: AdPlacement;
+  priority?: number; // 1 to 10 (higher priority ads appear first/more frequently)
+  category?: string;
+  pricing?: {
+    amountKz?: number;
     amountUsdt?: number;
-    billingModel: 'monthly' | 'weekly' | 'cpc' | 'fixed';
-    isPaid: boolean;
+    billingModel?: 'monthly' | 'weekly' | 'cpc' | 'fixed';
+    isPaid?: boolean;
     notes?: string;
   };
-  impressions: number;
-  clicks: number;
-  startDate: string;
-  endDate: string;
+  impressions?: number;
+  clicks?: number;
+  startDate?: string;
+  endDate?: string;
   createdAt: string;
   updatedAt: string;
   contactEmail?: string;
