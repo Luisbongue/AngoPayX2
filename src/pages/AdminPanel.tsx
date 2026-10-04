@@ -38,6 +38,9 @@ import {
   PhoneCall,
   Copy,
   Check,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  ShoppingBag,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { apiClient, getStoredToken } from '../services/api.ts';
@@ -479,6 +482,39 @@ export const AdminPanel: React.FC = () => {
   };
 
   // --- Advertising & Monetization Handlers ---
+  const [adImageLoading, setAdImageLoading] = useState(false);
+
+  const handleAdImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showError('Por favor selecione um arquivo de imagem válido (PNG, JPG, WebP).');
+      return;
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      showError('O tamanho da imagem não deve exceder 15MB.');
+      return;
+    }
+
+    setAdImageLoading(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        setAdForm((prev) => ({ ...prev, bannerUrl: result }));
+        showSuccess('Imagem do produto carregada com sucesso!');
+      }
+      setAdImageLoading(false);
+    };
+    reader.onerror = () => {
+      showError('Erro ao processar ficheiro de imagem.');
+      setAdImageLoading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleOpenCreateAd = () => {
     setEditingAd(null);
     setAdForm({
@@ -2130,13 +2166,25 @@ export const AdminPanel: React.FC = () => {
                                 )}
                                 <div>
                                   <div className="flex items-center gap-1.5">
-                                    <strong className="text-white font-bold">{ad.companyName}</strong>
+                                    <strong className="text-white font-bold">{ad.title}</strong>
                                     <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                                       {ad.badgeText}
                                     </span>
                                   </div>
-                                  <p className="text-xs text-slate-400 line-clamp-1 max-w-xs">{ad.title}</p>
-                                  <span className="text-[10px] text-slate-500">{ad.category}</span>
+                                  <p className="text-xs text-slate-400 line-clamp-1 max-w-xs">{ad.companyName} • {ad.category}</p>
+                                  {ad.destinationUrl && (
+                                    <a
+                                      href={ad.destinationUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-[11px] text-purple-400 hover:text-purple-300 font-mono mt-0.5 hover:underline"
+                                      title="Abrir link do produto divulgado"
+                                    >
+                                      <LinkIcon className="w-3 h-3 text-purple-400 shrink-0" />
+                                      <span className="truncate max-w-[190px]">{ad.destinationUrl}</span>
+                                      <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                                    </a>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -2768,49 +2816,202 @@ export const AdminPanel: React.FC = () => {
 
             <div>
               <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">
-                <Megaphone className="w-4 h-4" />
-                <span>Gestão Comercial de Publicidade</span>
+                <ShoppingBag className="w-4 h-4" />
+                <span>Módulo de Anúncios & Divulgação de Produtos</span>
               </div>
               <h3 className="text-lg font-black text-white">
-                {editingAd ? `Editar Anúncio — ${editingAd.companyName}` : 'Publicar Anúncio de Empresa'}
+                {editingAd ? `Editar Anúncio — ${editingAd.title}` : 'Publicar Novo Produto / Anúncio'}
               </h3>
               <p className="text-xs text-slate-400">
-                Configure os detalhes da campanha publicitária, valor cobrado da empresa e locais de exibição no AngoPayX.
+                O Administrador define a imagem e o link direto do produto ou serviço a ser divulgado no AngoPayX.
               </p>
             </div>
 
             {adForm.inquiryId && (
               <div className="p-3 rounded-xl bg-purple-950/40 border border-purple-500/40 text-purple-300 text-xs flex items-center justify-between">
-                <span>Vinculado à solicitação comercial recebida da empresa <strong>{adForm.companyName}</strong></span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-purple-500/20 text-purple-200 font-bold">Lead Aprovado</span>
+                <span>Vinculado à solicitação comercial recebida de <strong>{adForm.companyName}</strong></span>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-purple-500/20 text-purple-200 font-bold">Proposta Comercial</span>
               </div>
             )}
 
             <form onSubmit={handleSaveAd} className="space-y-4">
+              {/* 1. SEÇÃO PRINCIPAL: IMAGEM DO PRODUTO A SER DIVULGADO */}
+              <div className="p-4 rounded-2xl bg-slate-950/90 border border-purple-500/40 shadow-inner space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-white flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-purple-400" />
+                    <span>1. Imagem do Produto a ser Divulgado *</span>
+                  </label>
+                  {adForm.bannerUrl && (
+                    <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Imagem Definida
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  {/* Upload button from device */}
+                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-200 text-xs font-bold transition group">
+                    <Upload className={`w-4 h-4 text-purple-400 group-hover:scale-110 transition ${adImageLoading ? 'animate-spin' : ''}`} />
+                    <span>{adImageLoading ? 'A processar imagem...' : 'Carregar Imagem do Dispositivo (PNG, JPG)'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAdImageFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {/* Clear image button if present */}
+                  {adForm.bannerUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setAdForm({ ...adForm, bannerUrl: '' })}
+                      className="px-3 py-2 bg-slate-800 hover:bg-rose-950/60 hover:text-rose-400 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5"
+                      title="Limpar imagem atual"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Limpar</span>
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1 text-[11px]">
+                    <span className="text-slate-400">Ou cole a URL / Link da imagem:</span>
+                    <div className="flex items-center gap-1 text-[10px]">
+                      <span className="text-slate-500">Exemplos:</span>
+                      <button
+                        type="button"
+                        onClick={() => setAdForm({ ...adForm, bannerUrl: 'https://images.unsplash.com/photo-1556742049-0a67c5574f73?auto=format&fit=crop&w=800&q=80' })}
+                        className="text-purple-400 hover:underline"
+                      >
+                        Produto
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => setAdForm({ ...adForm, bannerUrl: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=800&q=80' })}
+                        className="text-purple-400 hover:underline"
+                      >
+                        Fintech
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => setAdForm({ ...adForm, bannerUrl: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=800&q=80' })}
+                        className="text-purple-400 hover:underline"
+                      >
+                        Banca
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={adForm.bannerUrl}
+                    onChange={(e) => setAdForm({ ...adForm, bannerUrl: e.target.value })}
+                    placeholder="https://... ou imagem carregada via ficheiro acima"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
+                  />
+                </div>
+
+                {/* Real-time Image Preview */}
+                {adForm.bannerUrl ? (
+                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row items-center gap-3.5">
+                    <img
+                      src={adForm.bannerUrl}
+                      alt="Pré-visualização do Produto"
+                      className="w-full sm:w-36 h-28 object-cover rounded-xl border border-slate-700 shadow-md shrink-0 bg-slate-950"
+                      onError={(e) => {
+                        (e.currentTarget as any).src = 'https://images.unsplash.com/photo-1556742049-0a67c5574f73?auto=format&fit=crop&w=800&q=80';
+                      }}
+                    />
+                    <div className="min-w-0 text-xs space-y-1 w-full">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          {adForm.badgeText || 'Produto em Destaque'}
+                        </span>
+                        <span className="text-slate-400 text-[11px] truncate">
+                          {adForm.companyName || 'Nome da Loja'}
+                        </span>
+                      </div>
+                      <p className="font-bold text-white text-sm truncate">
+                        {adForm.title || 'Título do Produto a ser Divulgado'}
+                      </p>
+                      <p className="text-slate-400 text-[11px] line-clamp-2">
+                        {adForm.description || 'Descrição do produto ou oferta especial para os utilizadores...'}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-5 text-center border-2 border-dashed border-slate-800 rounded-xl text-slate-500 text-xs">
+                    Nenhuma imagem selecionada. Carregue um ficheiro do dispositivo ou cole uma URL acima.
+                  </div>
+                )}
+              </div>
+
+              {/* 2. SEÇÃO PRINCIPAL: LINK DO PRODUTO A SER DIVULGADO */}
+              <div className="p-4 rounded-2xl bg-purple-950/20 border border-purple-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-white flex items-center gap-2">
+                    <LinkIcon className="w-4 h-4 text-purple-400" />
+                    <span>2. Link do Produto a ser Divulgado *</span>
+                  </label>
+
+                  {adForm.destinationUrl && adForm.destinationUrl.startsWith('http') && (
+                    <a
+                      href={adForm.destinationUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-emerald-400 hover:text-emerald-300 font-bold inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-950/60 border border-emerald-500/30 hover:border-emerald-500 transition"
+                      title="Abrir e testar o link do produto em nova aba"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Testar Link do Produto</span>
+                    </a>
+                  )}
+                </div>
+
+                <input
+                  type="url"
+                  required
+                  value={adForm.destinationUrl}
+                  onChange={(e) => setAdForm({ ...adForm, destinationUrl: e.target.value })}
+                  placeholder="https://sua-loja.com/produto-exemplo ou https://wa.me/244953330585..."
+                  className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-purple-500"
+                />
+
+                <p className="text-[11px] text-slate-400">
+                  Quando o cliente clicar na imagem, no título ou no botão do anúncio, este é o link direto para onde ele será redirecionado (página de compra, catálogo ou WhatsApp de vendas).
+                </p>
+              </div>
+
+              {/* 3. DADOS INFORMATIVOS DO PRODUTO & ANÚNCIO */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Nome da Empresa Anunciante *
+                    Nome / Título do Produto a ser Divulgado *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={adForm.title}
+                    onChange={(e) => setAdForm({ ...adForm, title: e.target.value })}
+                    placeholder="Ex: iPhone 15 Pro Max 256GB ou Recargas Express"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Loja / Empresa Anunciante *
                   </label>
                   <input
                     type="text"
                     required
                     value={adForm.companyName}
                     onChange={(e) => setAdForm({ ...adForm, companyName: e.target.value })}
-                    placeholder="Ex: Unitel Money, Banco BAI, etc."
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Categoria do Negócio
-                  </label>
-                  <input
-                    type="text"
-                    value={adForm.category}
-                    onChange={(e) => setAdForm({ ...adForm, category: e.target.value })}
-                    placeholder="Ex: Telecom & Finanças, Banca, E-commerce..."
+                    placeholder="Ex: Tech Store Angola, Unitel, BAI, etc."
                     className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
                   />
                 </div>
@@ -2818,28 +3019,14 @@ export const AdminPanel: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Título Principal do Anúncio *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={adForm.title}
-                  onChange={(e) => setAdForm({ ...adForm, title: e.target.value })}
-                  placeholder="Ex: Recargas & Pagamentos em Kwanza sem Taxa Adicional"
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Descrição Promocional *
+                  Descrição Promocional do Produto *
                 </label>
                 <textarea
                   required
                   rows={2}
                   value={adForm.description}
                   onChange={(e) => setAdForm({ ...adForm, description: e.target.value })}
-                  placeholder="Texto atrativo explicando os benefícios da empresa para os utilizadores..."
+                  placeholder="Texto atrativo explicando os detalhes, preço ou benefícios do produto para os utilizadores..."
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500 resize-none"
                 />
               </div>
@@ -2847,119 +3034,29 @@ export const AdminPanel: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Texto do Botão (Call to Action)
+                    Texto do Botão (Chamada para Ação)
                   </label>
                   <input
                     type="text"
                     value={adForm.callToAction}
                     onChange={(e) => setAdForm({ ...adForm, callToAction: e.target.value })}
-                    placeholder="Ex: Saber Mais, Abrir Conta, Falar no WhatsApp"
+                    placeholder="Ex: Comprar Produto, Ver Oferta, Pedir no WhatsApp"
                     className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
                   />
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-slate-300">
-                      Link de Destino (URL do Anúncio ou WhatsApp) *
-                    </label>
-                    {adForm.destinationUrl && adForm.destinationUrl.startsWith('http') && (
-                      <a
-                        href={adForm.destinationUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[11px] text-purple-400 hover:text-purple-300 inline-flex items-center gap-1 font-semibold"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        <span>Testar Link</span>
-                      </a>
-                    )}
-                  </div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Selo / Distintivo Comercial
+                  </label>
                   <input
                     type="text"
-                    required
-                    value={adForm.destinationUrl}
-                    onChange={(e) => setAdForm({ ...adForm, destinationUrl: e.target.value })}
-                    placeholder="https://empresa.ao ou https://wa.me/244..."
+                    value={adForm.badgeText}
+                    onChange={(e) => setAdForm({ ...adForm, badgeText: e.target.value })}
+                    placeholder="Ex: Oferta Especial, Produto em Destaque, Parceiro Oficial"
                     className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
                   />
                 </div>
-              </div>
-
-              {/* Banner Image & Preview */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-300">
-                    URL da Imagem do Anúncio / Banner *
-                  </label>
-                  <div className="flex items-center gap-1 text-[10px]">
-                    <span className="text-slate-400">Sugestões rápidas:</span>
-                    <button
-                      type="button"
-                      onClick={() => setAdForm({ ...adForm, bannerUrl: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=800&q=80' })}
-                      className="text-purple-400 hover:underline"
-                    >
-                      Banca
-                    </button>
-                    <span>•</span>
-                    <button
-                      type="button"
-                      onClick={() => setAdForm({ ...adForm, bannerUrl: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=800&q=80' })}
-                      className="text-purple-400 hover:underline"
-                    >
-                      Fintech
-                    </button>
-                    <span>•</span>
-                    <button
-                      type="button"
-                      onClick={() => setAdForm({ ...adForm, bannerUrl: 'https://images.unsplash.com/photo-1556742049-0a67c5574f73?auto=format&fit=crop&w=800&q=80' })}
-                      className="text-purple-400 hover:underline"
-                    >
-                      E-commerce
-                    </button>
-                    <span>•</span>
-                    <button
-                      type="button"
-                      onClick={() => setAdForm({ ...adForm, bannerUrl: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=800&q=80' })}
-                      className="text-purple-400 hover:underline"
-                    >
-                      Serviços
-                    </button>
-                  </div>
-                </div>
-                <input
-                  type="text"
-                  value={adForm.bannerUrl}
-                  onChange={(e) => setAdForm({ ...adForm, bannerUrl: e.target.value })}
-                  placeholder="https://images.unsplash.com/... ou URL do banner corporativo"
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
-                />
-
-                {/* Real-time Banner Preview Card */}
-                {adForm.bannerUrl && (
-                  <div className="mt-2.5 p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center gap-3">
-                    <img
-                      src={adForm.bannerUrl}
-                      alt="Pré-visualização do Banner"
-                      className="h-16 w-28 object-cover rounded-lg border border-slate-700 shrink-0 bg-slate-900"
-                      onError={(e) => {
-                        (e.currentTarget as any).src = 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=800&q=80';
-                      }}
-                    />
-                    <div className="min-w-0 text-xs">
-                      <div className="flex items-center gap-1.5 font-bold text-white">
-                        <span>{adForm.companyName || 'Empresa Anunciante'}</span>
-                        <span className="px-1.5 py-0.2 rounded text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                          {adForm.badgeText || 'Patrocinado'}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 truncate mt-0.5">{adForm.title || 'Título do anúncio publicitário'}</p>
-                      <span className="text-[10px] text-purple-400 font-semibold mt-0.5 block">
-                        Posicionamento: {adForm.placement === 'top_banner' ? 'Banner no Topo' : adForm.placement === 'dashboard_native' ? 'Card no Dashboard' : adForm.placement === 'sidebar' ? 'Barra Lateral' : 'Todas as Posições'}
-                      </span>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Placement & Badge */}
